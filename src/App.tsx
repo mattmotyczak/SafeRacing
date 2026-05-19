@@ -3,23 +3,132 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { motion } from "motion/react";
-import { Circle, Gamepad2, Info, Gauge, Timer, ShieldCheck } from "lucide-react";
-import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { Gamepad2, ShieldCheck, ChevronLeft, Trophy, Flag, AlertTriangle, Car, Zap, Heart } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+
+type GameStatus = 'menu' | 'mode_selection' | 'playing' | 'game_over';
+
+interface Question {
+  question: string;
+  options: string[];
+  answer: number;
+}
+
+const db_easy: Question[] = [
+  { question: "¿Qué significa la bandera roja?", options: ["Peligro, detener carrera", "Última vuelta", "Entrada a pits", "Carrera terminada"], answer: 0 },
+  { question: "¿Cuál es el color de la bandera de salida?", options: ["Roja", "Verde", "Cuadros", "Amarilla"], answer: 1 },
+  { question: "¿Qué debe hacer un piloto ante bandera amarilla?", options: ["Acelerando", "Reducir velocidad y no rebasar", "Ir a pits", "Detener el auto inmediatamente"], answer: 1 },
+  { question: "¿Dónde se detienen los autos para cambiar llantas?", options: ["En la pista", "En el garaje", "En los pits", "En la meta"], answer: 2 },
+  { question: "¿Cuántos pilotos hay en un auto de F1?", options: ["Dos", "Uno", "Cuatro", "Tres"], answer: 1 },
+];
+
+const db_hard: Question[] = [
+  { question: "¿Cuál es el límite de velocidad en el Pit Lane (estándar)?", options: ["60 km/h", "80 km/h", "100 km/h", "50 km/h"], answer: 1 },
+  { question: "¿Qué sistema permite reducir la carga aerodinámica en rectas?", options: ["ERS", "KERS", "DRS", "DAS"], answer: 2 },
+  { question: "¿Cuántos puntos recibe el ganador de un GP?", options: ["20", "15", "25", "10"], answer: 2 },
+  { question: "¿Qué neumático es el más blando en la gama actual?", options: ["C1", "C3", "C5", "C2"], answer: 2 },
+  { question: "¿Quién ostenta el récord de más campeonatos del mundo?", options: ["Hamilton / Schumacher", "Vettel", "Senna", "Prost"], answer: 0 },
+];
 
 export default function App() {
-  const [latency, setLatency] = useState(14);
+  const [status, setStatus] = useState<GameStatus>('menu');
+  const [mode, setMode] = useState<'easy' | 'hard'>('easy');
+  const [lives, setLives] = useState(1);
+  const [consecutiveCorrect, setConsecutiveCorrect] = useState(0);
+  const [score, setScore] = useState(0);
+  const [isMoving, setIsMoving] = useState(false);
+  const [isCrashed, setIsCrashed] = useState(false);
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [lightState, setLightState] = useState<'red' | 'yellow' | 'green'>('red');
 
-  // Simple effect to simulate real-time data flicker
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLatency(prev => {
-        const delta = Math.floor(Math.random() * 3) - 1;
-        return Math.max(12, Math.min(18, prev + delta));
-      });
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
+  const getNewQuestion = useCallback(() => {
+    const db = mode === 'easy' ? db_easy : db_hard;
+    const randomIndex = Math.floor(Math.random() * db.length);
+    setCurrentQuestion(db[randomIndex]);
+    setLightState('red');
+  }, [mode]);
+
+  const startGame = (selectedMode: 'easy' | 'hard') => {
+    setMode(selectedMode);
+    setStatus('playing');
+    setLives(1);
+    setScore(0);
+    setConsecutiveCorrect(0);
+    setIsMoving(true);
+    setIsCrashed(false);
+    setLightState('green');
+    
+    // Initial movement - slow down move time
+    setTimeout(() => {
+      setLightState('yellow');
+      setTimeout(() => {
+        setIsMoving(false);
+        getNewQuestion();
+      }, 2000); // 2s yellow
+    }, 3000); // 3s green
+  };
+
+  const handleAnswer = (index: number) => {
+    if (!currentQuestion || isMoving || isCrashed) return;
+
+    const isCorrect = index === currentQuestion.answer;
+
+    if (isCorrect) {
+      const nextConsecutive = consecutiveCorrect + 1;
+      setConsecutiveCorrect(nextConsecutive);
+      setScore(prev => prev + 1);
+      
+      if (nextConsecutive % 5 === 0 && lives < 5) {
+        setLives(prev => prev + 1);
+      }
+
+      setIsMoving(true);
+      setCurrentQuestion(null);
+      setLightState('green');
+
+      // Move for 5s (3s green + 2s yellow)
+      setTimeout(() => {
+        setLightState('yellow');
+        setTimeout(() => {
+          setIsMoving(false);
+          getNewQuestion();
+        }, 2000);
+      }, 3000);
+    } else {
+      setIsMoving(true);
+      setCurrentQuestion(null);
+      setLightState('green');
+      
+      // Crash at 2s
+      setTimeout(() => {
+        setIsMoving(false);
+        setIsCrashed(true);
+        setConsecutiveCorrect(0);
+        setLightState('red');
+        
+        const newLives = lives - 1;
+        setLives(newLives);
+
+        setTimeout(() => {
+          if (newLives > 0) {
+            setIsCrashed(false);
+            setIsMoving(true);
+            setLightState('green');
+            setTimeout(() => {
+              setLightState('yellow');
+              setTimeout(() => {
+                setIsMoving(false);
+                getNewQuestion();
+              }, 2000);
+            }, 3000);
+          } else {
+            setStatus('game_over');
+          }
+        }, 1500);
+      }, 2000); // Crash at 2s
+    }
+  };
 
   return (
     <div className="relative min-h-screen w-full bg-background flex flex-col font-sans selection:bg-primary/20 overflow-x-hidden">
@@ -37,12 +146,6 @@ export default function App() {
             <ShieldCheck className="w-6 h-6 fill-primary/10" />
             <span className="uppercase tracking-tight">SafeRacing</span>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 px-3 py-1 bg-surface-container rounded-full border border-white/5">
-              <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
-              <span className="text-[10px] uppercase font-bold tracking-widest text-on-surface/60">Live</span>
-            </div>
-          </div>
         </div>
       </header>
 
@@ -55,81 +158,243 @@ export default function App() {
             transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
             className="w-full aspect-video relative rounded-2xl border border-white/10 bg-surface-container-lowest/40 backdrop-blur-sm overflow-hidden game-sector-glow group shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]"
           >
-            {/* Empty Container Placeholder */}
-            <div className="absolute inset-0 z-0 flex items-center justify-center border-2 border-dashed border-sky-500/5 rounded-2xl m-6">
-              <motion.div 
-                animate={{ opacity: [0.2, 0.4, 0.2] }}
-                transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                className="text-center"
-              >
-                <Gamepad2 className="w-20 h-20 text-primary/10 mx-auto mb-6" />
-                <p className="text-primary/20 text-lg sm:text-2xl font-black uppercase tracking-[0.3em]">Awaiting Video Stream</p>
-              </motion.div>
-            </div>
-
-            {/* Interface Overlay */}
-            <div className="absolute inset-0 z-10 p-4 sm:p-10 flex flex-col justify-between pointer-events-none">
-              <div className="flex justify-between items-start">
-                {/* Circuit Status */}
-                <motion.div 
-                  initial={{ x: -40, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: 0.6, type: "spring", damping: 20 }}
-                  className="glass-panel p-4 sm:p-5 rounded-xl flex items-center gap-5 border-white/5 ring-1 ring-white/5 shadow-xl"
-                >
-                  <div className="w-1.5 h-12 bg-primary rounded-full shadow-[0_0_20px_rgba(142,213,255,0.6)]" />
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <Gauge className="w-3 h-3 text-primary opacity-60" />
-                      <p className="text-[10px] text-primary uppercase tracking-[0.2em] font-bold">Circuit Status</p>
-                    </div>
-                    <p className="text-lg sm:text-2xl font-black text-white tracking-tight uppercase">Interlagos - Dry</p>
+            {/* Infinite Runner View */}
+            {status === 'playing' && (
+              <div className="absolute inset-0 z-0">
+                {/* Looping Background Illusion */}
+                <div className="absolute inset-0 overflow-hidden">
+                  <div 
+                    style={{ animationPlayState: isMoving ? 'running' : 'paused' }}
+                    className="absolute inset-0 w-[200%] h-full flex animate-scroll"
+                  >
+                    <div className="w-1/2 h-full bg-[linear-gradient(90deg,transparent_0%,rgba(142,213,255,0.05)_50%,transparent_100%)] bg-[size:300px_100%]" />
+                    <div className="w-1/2 h-full bg-[linear-gradient(90deg,transparent_0%,rgba(142,213,255,0.05)_50%,transparent_100%)] bg-[size:300px_100%]" />
                   </div>
-                </motion.div>
-
-                {/* Latency Info */}
-                <motion.div 
-                  initial={{ x: 40, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: 0.7, type: "spring", damping: 20 }}
-                  className="glass-panel p-4 sm:p-5 rounded-xl text-right border-white/5 ring-1 ring-white/5 shadow-xl min-w-[120px]"
-                >
-                  <div className="flex items-center justify-end gap-2 mb-1">
-                    <p className="text-[10px] text-primary uppercase tracking-[0.2em] font-bold">Latency</p>
-                    <Timer className="w-3 h-3 text-primary opacity-60" />
-                  </div>
-                  <p className="text-xl sm:text-3xl font-black text-white tracking-tighter">{latency} <span className="text-sm opacity-60">MS</span></p>
-                </motion.div>
-              </div>
-
-              {/* Bottom Status Indicator */}
-              <div className="flex justify-center">
-                <motion.div 
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: 0.8 }}
-                  className="flex items-center gap-4 px-10 py-4 glass-panel rounded-full border-primary/20 shadow-[0_0_30px_rgba(0,0,0,0.5)] ring-1 ring-white/10"
-                >
-                  <motion.div
-                    animate={{ 
-                      scale: [1, 1.3, 1],
-                      opacity: [1, 0.6, 1],
-                      filter: ["blur(0px)", "blur(2px)", "blur(0px)"]
+                  
+                  {/* Road Lines */}
+                  <div 
+                    style={{ 
+                      animation: isMoving ? 'scrollBackground 1s linear infinite' : 'none',
                     }}
-                    transition={{ repeat: Infinity, duration: 2 }}
-                    className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.8)]"
-                  />
-                  <span className="text-xs sm:text-sm font-black text-white tracking-[0.3em] uppercase">System Standby</span>
+                    className="absolute bottom-1/4 left-0 w-[200%] h-1 flex gap-16"
+                  >
+                    {[...Array(20)].map((_, i) => (
+                      <div key={i} className="w-24 h-full bg-white/5 rounded-full" />
+                    ))}
+                  </div>
+                </div>
+
+                {/* GUI Stoplight */}
+                <div className="absolute top-6 right-6 z-40">
+                  <div className="glass-panel p-2 rounded-xl flex flex-col gap-2 border-white/10 bg-slate-950/80 shadow-2xl">
+                    <div className={`w-8 h-8 rounded-full ${lightState === 'red' ? 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.8)]' : 'bg-red-950/40'}`} />
+                    <div className={`w-8 h-8 rounded-full ${lightState === 'yellow' ? 'bg-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.8)]' : 'bg-yellow-950/40'}`} />
+                    <div className={`w-8 h-8 rounded-full ${lightState === 'green' ? 'bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.8)]' : 'bg-green-950/40'}`} />
+                  </div>
+                </div>
+
+                {/* The Car */}
+                <motion.div 
+                  animate={{ 
+                    y: isMoving ? [0, -2, 0] : 0,
+                    rotate: isCrashed ? [0, 45, 90] : 0,
+                    x: isCrashed ? [0, 20] : 0,
+                    filter: isCrashed ? "blur(1px) grayscale(1)" : "none"
+                  }}
+                  transition={{ 
+                    y: { repeat: Infinity, duration: 0.4 }, // Slower bounce
+                    rotate: { duration: 0.5 },
+                    x: { duration: 0.5 }
+                  }}
+                  className="absolute bottom-1/4 left-1/4 -translate-x-1/2 z-20"
+                >
+                  <div className="relative group">
+                    <div className={`
+                      transition-all duration-500 p-4 rounded-xl flex items-center justify-center
+                      ${lives === 5 ? 'bg-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.5)] scale-110' : 
+                        lives >= 3 ? 'bg-primary shadow-[0_0_20px_rgba(142,213,255,0.4)] scale-105' : 
+                        lives > 1 ? 'bg-primary/60 border border-primary/40' : 
+                        'bg-slate-700 border border-white/10'}
+                    `}>
+                      <Car className={`w-12 h-12 ${lives > 1 ? 'text-on-primary' : 'text-white/40'}`} />
+                    </div>
+
+                    {isCrashed && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0 }}
+                        animate={{ opacity: [0, 1, 0], scale: [1, 2.5], y: -50 }}
+                        transition={{ repeat: Infinity, duration: 0.5 }}
+                        className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 bg-slate-400 rounded-full blur-xl"
+                      />
+                    )}
+
+                    {isMoving && !isCrashed && (
+                      <motion.div 
+                        animate={{ opacity: [0.5, 1, 0.5], x: [-10, -15, -10] }}
+                        transition={{ repeat: Infinity, duration: 0.1 }}
+                        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full w-8 h-4 bg-gradient-to-r from-orange-500 to-transparent blur-sm rounded-full"
+                      />
+                    )}
+
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex gap-1">
+                      {[...Array(5)].map((_, i) => (
+                        <Heart 
+                          key={i} 
+                          className={`w-3 h-3 ${i < lives ? 'fill-red-500 text-red-500' : 'text-white/10'}`} 
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </motion.div>
               </div>
+            )}
+
+            {/* UI Layer */}
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-6 text-center">
+              <AnimatePresence mode="wait">
+                {status === 'menu' && (
+                  <motion.div
+                    key="menu"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="flex flex-col items-center"
+                  >
+                    <motion.div
+                      animate={{ rotate: [0, 5, -5, 0] }}
+                      transition={{ repeat: Infinity, duration: 4 }}
+                      className="mb-8"
+                    >
+                      <Gamepad2 className="w-24 h-24 text-primary/40" />
+                    </motion.div>
+                    <h1 className="text-5xl sm:text-7xl font-black text-white uppercase tracking-tighter mb-8 drop-shadow-2xl">
+                      SafeRacing
+                    </h1>
+                    <button
+                      onClick={() => setStatus('mode_selection')}
+                      className="px-12 py-4 bg-primary text-on-primary font-black uppercase tracking-[0.2em] rounded-xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(142,213,255,0.4)]"
+                    >
+                      Jugar
+                    </button>
+                  </motion.div>
+                )}
+
+                {status === 'mode_selection' && (
+                  <motion.div
+                    key="select"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="flex flex-col items-center"
+                  >
+                    <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight mb-12">
+                      Seleccione Modalidad
+                    </h2>
+                    <div className="flex flex-col sm:flex-row gap-6">
+                      <button
+                        onClick={() => startGame('easy')}
+                        className="glass-panel px-10 py-5 rounded-xl border border-white/10 hover:border-primary/50 hover:bg-primary/10 transition-all flex flex-col items-center gap-3 w-48"
+                      >
+                        <Flag className="w-8 h-8 text-green-400" />
+                        <span className="font-bold text-white uppercase tracking-widest">Fácil</span>
+                      </button>
+                      <button
+                        onClick={() => startGame('hard')}
+                        className="glass-panel px-10 py-5 rounded-xl border border-white/10 hover:border-red-500/50 hover:bg-red-500/10 transition-all flex flex-col items-center gap-3 w-48"
+                      >
+                        <AlertTriangle className="w-8 h-8 text-red-500" />
+                        <span className="font-bold text-white uppercase tracking-widest">Realista</span>
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => setStatus('menu')}
+                      className="mt-12 flex items-center gap-2 text-on-surface-variant hover:text-white transition-colors"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                      <span className="font-bold uppercase tracking-widest text-sm">Atrás</span>
+                    </button>
+                  </motion.div>
+                )}
+
+                {status === 'playing' && currentQuestion && !isMoving && !isCrashed && (
+                  <motion.div
+                    key="question"
+                    initial={{ opacity: 0, y: 50 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 50 }}
+                    className="absolute bottom-6 left-6 right-6 z-50"
+                  >
+                    <div className="glass-panel p-6 rounded-3xl border-primary/20 shadow-2xl relative overflow-hidden backdrop-blur-3xl ring-1 ring-white/10">
+                      <div className="flex flex-col sm:flex-row items-center gap-6">
+                        <div className="flex-grow text-left">
+                          <h3 className="text-lg sm:text-xl font-bold text-white mb-4 leading-tight">
+                            {currentQuestion.question}
+                          </h3>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 w-full sm:w-auto min-w-[300px]">
+                          {currentQuestion.options.map((opt, i) => (
+                            <button
+                              key={i}
+                              onClick={() => handleAnswer(i)}
+                              className="glass-panel p-3 rounded-xl border border-white/5 hover:border-primary/40 hover:bg-primary/5 transition-all text-xs font-medium text-on-surface text-center hover:scale-[1.02] active:scale-[0.98]"
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {status === 'game_over' && (
+                  <motion.div
+                    key="game_over"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex flex-col items-center"
+                  >
+                    <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mb-6 border border-red-500/20">
+                      <Trophy className="w-12 h-12 text-red-500" />
+                    </div>
+                    <h2 className="text-4xl sm:text-6xl font-black text-white uppercase mb-2">¡GAME OVER!</h2>
+                    <p className="text-lg text-primary font-bold uppercase tracking-[0.2em] mb-12">
+                      Puntaje Final: {score}
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <button
+                        onClick={() => startGame(mode)}
+                        className="px-10 py-4 bg-primary text-on-primary font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all"
+                      >
+                        Reintentar
+                      </button>
+                      <button
+                        onClick={() => setStatus('menu')}
+                        className="px-10 py-4 glass-panel border border-white/10 text-white font-black uppercase tracking-widest rounded-xl hover:bg-white/5 transition-all"
+                      >
+                        Menú
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            {/* Corner Decorative Elements */}
-            <div className="absolute top-0 left-0 w-20 h-20 border-t-4 border-l-4 border-primary/30 rounded-tl-3xl m-2 opacity-50" />
-            <div className="absolute top-0 right-0 w-20 h-20 border-t-4 border-r-4 border-white/10 rounded-tr-3xl m-2 opacity-30" />
-            <div className="absolute bottom-0 left-0 w-20 h-20 border-b-4 border-l-4 border-white/10 rounded-bl-3xl m-2 opacity-30" />
-            <div className="absolute bottom-0 right-0 w-20 h-20 border-b-4 border-r-4 border-primary/30 rounded-br-3xl m-2 opacity-50" />
-            
+            {/* Score HUD */}
+            {status === 'playing' && (
+              <div className="absolute top-6 left-6 z-40 flex items-center gap-6">
+                 <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-bold text-primary/60 tracking-widest mb-1">Score</span>
+                    <span className="text-2xl font-black text-white leading-none">{score}</span>
+                 </div>
+                 <div className="h-10 w-px bg-white/10" />
+                 <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-bold text-primary/60 tracking-widest mb-1">Combo</span>
+                    <span className="text-2xl font-black text-primary leading-none">x{consecutiveCorrect}</span>
+                 </div>
+              </div>
+            )}
+
             {/* Internal View Scanlines Overlay */}
             <div className="absolute inset-0 scanline opacity-[0.08] pointer-events-none" />
             
@@ -139,20 +404,18 @@ export default function App() {
         </div>
       </main>
 
-      {/* Footer Branding - Adjusted to fixed height and better centering */}
-      <footer className="fixed bottom-0 left-0 w-full py-10 z-20 pointer-events-none">
+      {/* Footer Branding - Shrunk by 60% */}
+      <footer className="fixed bottom-0 left-0 w-full py-6 z-20 pointer-events-none">
         <div className="max-w-[1280px] mx-auto px-8 flex justify-center">
           <motion.div 
-            initial={{ y: 50, opacity: 0 }}
+            initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.5, duration: 0.8, ease: "circOut" }}
-            className="glass-panel p-6 sm:p-8 rounded-2xl flex flex-col items-center justify-center border-white/5 shadow-2xl backdrop-blur-2xl ring-1 ring-white/5 pointer-events-auto min-w-[320px]"
+            className="glass-panel p-2.5 rounded-lg flex flex-col items-center justify-center border-white/5 shadow-xl backdrop-blur-2xl ring-1 ring-white/5 pointer-events-auto min-w-[120px]"
           >
-            <div className="flex items-center gap-3 mb-2">
-              <p className="text-primary font-black tracking-tight text-xl sm:text-2xl">Desarrollado por el Equipo Foxtrot</p>
-            </div>
-            <div className="h-px w-24 bg-gradient-to-r from-transparent via-primary/30 to-transparent mb-2" />
-            <p className="text-[10px] sm:text-[11px] uppercase font-bold tracking-[0.5em] text-on-surface-variant/70">Proyecto Final</p>
+            <p className="text-primary font-black tracking-tight text-[10px] sm:text-[12px]">Desarrollado por el Equipo Foxtrot</p>
+            <div className="h-px w-8 bg-gradient-to-r from-transparent via-primary/30 to-transparent my-1" />
+            <p className="text-[6px] sm:text-[7px] uppercase font-bold tracking-[0.4em] text-on-surface-variant/70">Proyecto Final</p>
           </motion.div>
         </div>
       </footer>

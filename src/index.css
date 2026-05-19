@@ -51,5 +51,14 @@
   .game-sector-glow {
     box-shadow: inset 0 0 40px rgba(56, 189, 248, 0.05), 0 0 20px rgba(0, 0, 0, 0.5);
   }
+
+  @keyframes scrollBackground {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  .animate-scroll {
+    animation: scrollBackground 10s linear infinite;
+  }
 }
 
