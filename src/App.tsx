@@ -15,6 +15,28 @@ interface Question {
   answer: number;
 }
 
+/**
+ * SQL Schema Representation for Reference:
+ * 
+ * CREATE TABLE questions (
+ *   id INTEGER PRIMARY KEY AUTOINCREMENT,
+ *   mode TEXT CHECK(mode IN ('easy', 'hard')),
+ *   question TEXT NOT NULL,
+ *   option_1 TEXT NOT NULL,
+ *   option_2 TEXT NOT NULL,
+ *   option_3 TEXT NOT NULL,
+ *   option_4 TEXT NOT NULL,
+ *   answer_index INTEGER NOT NULL
+ * );
+ * 
+ * INSERT INTO questions (mode, question, option_1, option_2, option_3, option_4, answer_index) VALUES
+ * ('easy', '¿Qué significa la bandera roja?', 'Peligro, detener carrera', 'Última vuelta', 'Entrada a pits', 'Carrera terminada', 0),
+ * ('easy', '¿Cuál es el color de la bandera de salida?', 'Roja', 'Verde', 'Cuadros', 'Amarilla', 1),
+ * ('easy', '¿Qué debe hacer un piloto ante bandera amarilla?', 'Acelerando', 'Reducir velocidad y no rebasar', 'Ir a pits', 'Detener el auto inmediatamente', 1),
+ * ('hard', '¿Cuál es el límite de velocidad en el Pit Lane (estándar)?', '60 km/h', '80 km/h', '100 km/h', '50 km/h', 1),
+ * ('hard', '¿Qué sistema permite reducir la carga aerodinámica en rectas?', 'ERS', 'KERS', 'DRS', 'DAS', 2);
+ */
+
 const db_easy: Question[] = [
   { question: "¿Qué significa la bandera roja?", options: ["Peligro, detener carrera", "Última vuelta", "Entrada a pits", "Carrera terminada"], answer: 0 },
   { question: "¿Cuál es el color de la bandera de salida?", options: ["Roja", "Verde", "Cuadros", "Amarilla"], answer: 1 },
@@ -59,14 +81,14 @@ export default function App() {
     setIsCrashed(false);
     setLightState('green');
     
-    // Initial movement - slow down move time
+    // Initial movement
     setTimeout(() => {
       setLightState('yellow');
       setTimeout(() => {
         setIsMoving(false);
         getNewQuestion();
-      }, 2000); // 2s yellow
-    }, 3000); // 3s green
+      }, 1000); // 1s yellow
+    }, 2000); // 2s green
   };
 
   const handleAnswer = (index: number) => {
@@ -87,14 +109,14 @@ export default function App() {
       setCurrentQuestion(null);
       setLightState('green');
 
-      // Move for 5s (3s green + 2s yellow)
+      // Move for 3s (2s green + 1s yellow)
       setTimeout(() => {
         setLightState('yellow');
         setTimeout(() => {
           setIsMoving(false);
           getNewQuestion();
-        }, 2000);
-      }, 3000);
+        }, 1000);
+      }, 2000);
     } else {
       setIsMoving(true);
       setCurrentQuestion(null);
@@ -120,8 +142,8 @@ export default function App() {
               setTimeout(() => {
                 setIsMoving(false);
                 getNewQuestion();
-              }, 2000);
-            }, 3000);
+              }, 1000);
+            }, 2000);
           } else {
             setStatus('game_over');
           }
@@ -161,25 +183,55 @@ export default function App() {
             {/* Infinite Runner View */}
             {status === 'playing' && (
               <div className="absolute inset-0 z-0">
-                {/* Looping Background Illusion */}
+                {/* Parallax Background Illusion */}
                 <div className="absolute inset-0 overflow-hidden">
-                  <div 
-                    style={{ animationPlayState: isMoving ? 'running' : 'paused' }}
-                    className="absolute inset-0 w-[200%] h-full flex animate-scroll"
-                  >
-                    <div className="w-1/2 h-full bg-[linear-gradient(90deg,transparent_0%,rgba(142,213,255,0.05)_50%,transparent_100%)] bg-[size:300px_100%]" />
-                    <div className="w-1/2 h-full bg-[linear-gradient(90deg,transparent_0%,rgba(142,213,255,0.05)_50%,transparent_100%)] bg-[size:300px_100%]" />
-                  </div>
-                  
-                  {/* Road Lines */}
+                  {/* Sky/Distant Background Placeholder */}
                   <div 
                     style={{ 
-                      animation: isMoving ? 'scrollBackground 1s linear infinite' : 'none',
+                      animation: isMoving ? 'scrollBackground 25s linear infinite' : 'none',
+                      animationPlayState: isMoving ? 'running' : 'paused' 
+                    }}
+                    className="absolute inset-0 w-[200%] h-1/2 flex border-b border-white/5 opacity-40"
+                  >
+                    <div className="w-1/2 h-full bg-[linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20),linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20)] bg-[size:100px_100px] bg-[position:0_0,50px_50px] relative">
+                        <span className="absolute top-4 left-4 text-[10px] text-white/10 uppercase">BG-START</span>
+                        <span className="absolute top-4 right-4 text-[10px] text-white/10 uppercase">BG-END</span>
+                    </div>
+                    <div className="w-1/2 h-full bg-[linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20),linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20)] bg-[size:100px_100px] bg-[position:0_0,50px_50px] relative">
+                        <span className="absolute top-4 left-4 text-[10px] text-white/10 uppercase">BG-START</span>
+                        <span className="absolute top-4 right-4 text-[10px] text-white/10 uppercase">BG-END</span>
+                    </div>
+                  </div>
+
+                  {/* Ground/Road Placeholder */}
+                  <div 
+                    style={{ 
+                      animation: isMoving ? 'scrollBackground 10s linear infinite' : 'none',
+                      animationPlayState: isMoving ? 'running' : 'paused'
+                    }}
+                    className="absolute bottom-0 left-0 w-[200%] h-1/2 flex bg-slate-900/20"
+                  >
+                    <div className="w-1/2 h-full border-t border-white/5 relative">
+                        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(142,213,255,0.02)_1px,transparent_1px)] bg-[size:40px_100%]" />
+                        <span className="absolute bottom-4 left-4 text-[10px] text-white/10 uppercase">GROUND-START</span>
+                        <span className="absolute bottom-4 right-4 text-[10px] text-white/10 uppercase">GROUND-END</span>
+                    </div>
+                    <div className="w-1/2 h-full border-t border-white/5 relative">
+                        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(142,213,255,0.02)_1px,transparent_1px)] bg-[size:40px_100%]" />
+                        <span className="absolute bottom-4 left-4 text-[10px] text-white/10 uppercase">GROUND-START</span>
+                        <span className="absolute bottom-4 right-4 text-[10px] text-white/10 uppercase">GROUND-END</span>
+                    </div>
+                  </div>
+                  
+                  {/* Slower Moving Decals or Far road marks */}
+                  <div 
+                    style={{ 
+                      animation: isMoving ? 'scrollBackground 2s linear infinite' : 'none',
                     }}
                     className="absolute bottom-1/4 left-0 w-[200%] h-1 flex gap-16"
                   >
                     {[...Array(20)].map((_, i) => (
-                      <div key={i} className="w-24 h-full bg-white/5 rounded-full" />
+                      <div key={i} className="w-32 h-full bg-white/5 rounded-full" />
                     ))}
                   </div>
                 </div>
@@ -193,30 +245,38 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* The Car */}
+                {/* The Car Placeholder Silhouettes */}
                 <motion.div 
                   animate={{ 
-                    y: isMoving ? [0, -2, 0] : 0,
-                    rotate: isCrashed ? [0, 45, 90] : 0,
-                    x: isCrashed ? [0, 20] : 0,
-                    filter: isCrashed ? "blur(1px) grayscale(1)" : "none"
+                    y: isMoving ? [0, -3, 0] : 0,
+                    rotate: isCrashed ? [0, 60, 120] : 0,
+                    x: isCrashed ? [0, 40] : 0,
+                    filter: isCrashed ? "blur(2px) brightness(0.5)" : "none"
                   }}
                   transition={{ 
-                    y: { repeat: Infinity, duration: 0.4 }, // Slower bounce
-                    rotate: { duration: 0.5 },
-                    x: { duration: 0.5 }
+                    y: { repeat: Infinity, duration: 0.3, ease: "easeInOut" },
+                    rotate: { duration: 0.6, ease: "easeIn" },
+                    x: { duration: 0.6, ease: "easeIn" }
                   }}
                   className="absolute bottom-1/4 left-1/4 -translate-x-1/2 z-20"
                 >
                   <div className="relative group">
-                    <div className={`
-                      transition-all duration-500 p-4 rounded-xl flex items-center justify-center
-                      ${lives === 5 ? 'bg-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.5)] scale-110' : 
-                        lives >= 3 ? 'bg-primary shadow-[0_0_20px_rgba(142,213,255,0.4)] scale-105' : 
-                        lives > 1 ? 'bg-primary/60 border border-primary/40' : 
-                        'bg-slate-700 border border-white/10'}
-                    `}>
-                      <Car className={`w-12 h-12 ${lives > 1 ? 'text-on-primary' : 'text-white/40'}`} />
+                    {/* Car Silhouette - Evolves with Lives and Score */}
+                    <div className="transition-all duration-700 flex items-center justify-center">
+                        {lives === 1 && <Car className="w-16 h-16 text-slate-600 drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]" />}
+                        {lives === 2 && <Car className="w-18 h-12 text-primary/80" />}
+                        {lives === 3 && <Car className="w-20 h-14 text-primary" />}
+                        {lives === 4 && <Car className="w-22 h-14 text-sky-300" />}
+                        {lives >= 5 && (
+                          <div className="relative">
+                            <Car className="w-24 h-12 text-yellow-500 scale-x-110" />
+                            <motion.div
+                              animate={{ opacity: [0, 0.5, 0] }}
+                              transition={{ repeat: Infinity, duration: 1 }}
+                              className="absolute inset-0 bg-yellow-400 blur-xl rounded-full"
+                            />
+                          </div>
+                        )}
                     </div>
 
                     {isCrashed && (
