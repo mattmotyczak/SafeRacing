@@ -1,0 +1,78 @@
+/* ==============================================================
+   1. SERVER.JS UPDATES
+   ============================================================== */
+// Your NeonDB table stores options in separate columns (option_1, option_2, etc).
+// We need to format the data so your React app gets the exact 
+// same structure it currently uses: { question, options: [...], answer }
+
+// Update your /api/questions endpoint in server.js to this:
+app.get('/api/questions', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM questions');
+    
+    // map() loops through every row returned by NeonDB
+    const formattedQuestions = result.rows.map(row => {
+      return {
+        mode: row.mode, // We keep 'easy' or 'hard' so we can split them on the frontend
+        question: row.question,
+        // We combine the 4 columns into a single array, exactly like your hardcoded arrays
+        options: [row.option_1, row.option_2, row.option_3, row.option_4],
+        answer: row.answer_index
+      };
+    });
+
+    // Send the perfectly formatted data back to React
+    res.json(formattedQuestions);
+  } catch (err) {
+    console.error('Database error:', err);
+    res.status(500).json({ error: 'Failed to fetch questions' });
+  }
+});
+
+
+/* ==============================================================
+   2. APP.TSX UPDATES
+   ============================================================== */
+// Now you need to fetch this data into your React app and save it in state,
+// replacing the static db_easy and db_hard arrays.
+
+// First, add these two new state variables inside your App component (around line 67):
+// const [dbEasy, setDbEasy] = useState<Question[]>([]);
+// const [dbHard, setDbHard] = useState<Question[]>([]);
+
+// Next, add a useEffect hook. This runs exactly ONCE when your app first loads,
+// fetching the questions from your server.js backend.
+// useEffect(() => {
+//   async function fetchQuestions() {
+//     try {
+//       // Call your local server.js
+//       const res = await fetch('http://localhost:3001/api/questions');
+//       const data = await res.json();
+//       
+//       // Split the data into easy and hard arrays and save them in state
+//       setDbEasy(data.filter((q: any) => q.mode === 'easy'));
+//       setDbHard(data.filter((q: any) => q.mode === 'hard'));
+//     } catch (err) {
+//       console.error("Error fetching questions:", err);
+//     }
+//   }
+//   fetchQuestions();
+// }, []);
+
+
+/* ==============================================================
+   3. MODIFY YOUR GENERATOR FUNCTION
+   ============================================================== */
+// Finally, update your getNewQuestion function to use the state variables 
+// (dbEasy / dbHard) instead of the hardcoded ones.
+
+// const getNewQuestion = useCallback(() => {
+//   // Use the new state variables!
+//   const db = mode === 'easy' ? dbEasy : dbHard;
+//   
+//   // Important safety check: If the DB is still loading, don't crash
+//   if (db.length === 0) return;
+//
+//   const randomIndex = Math.floor(Math.random() * db.length);
+//   setCurrentQuestion(db[randomIndex]);
+// }, [mode, dbEasy, dbHard]); // <-- Add dbEasy and dbHard to the dependency array

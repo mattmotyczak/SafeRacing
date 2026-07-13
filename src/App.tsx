@@ -64,6 +64,7 @@ export default function App() {
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [lightState, setLightState] = useState<'red' | 'yellow' | 'green'>('red');
 
+  // ACA ESTA EL GENERADOR DE PREGUNTAS/RESPUESTAS !!!!!
   const getNewQuestion = useCallback(() => {
     const db = mode === 'easy' ? db_easy : db_hard;
     const randomIndex = Math.floor(Math.random() * db.length);
@@ -80,7 +81,7 @@ export default function App() {
     setIsMoving(true);
     setIsCrashed(false);
     setLightState('green');
-    
+
     // Initial movement
     setTimeout(() => {
       setLightState('yellow');
@@ -100,7 +101,7 @@ export default function App() {
       const nextConsecutive = consecutiveCorrect + 1;
       setConsecutiveCorrect(nextConsecutive);
       setScore(prev => prev + 1);
-      
+
       if (nextConsecutive % 5 === 0 && lives < 5) {
         setLives(prev => prev + 1);
       }
@@ -121,14 +122,14 @@ export default function App() {
       setIsMoving(true);
       setCurrentQuestion(null);
       setLightState('green');
-      
+
       // Crash at 2s
       setTimeout(() => {
         setIsMoving(false);
         setIsCrashed(true);
         setConsecutiveCorrect(0);
         setLightState('red');
-        
+
         const newLives = lives - 1;
         setLives(newLives);
 
@@ -174,7 +175,7 @@ export default function App() {
       {/* Main Content: Dashboard */}
       <main className="flex-grow flex items-center justify-center pt-20 pb-32 px-6 relative z-10">
         <div className="w-full max-w-[1100px] perspective-1000">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
@@ -186,46 +187,46 @@ export default function App() {
                 {/* Parallax Background Illusion */}
                 <div className="absolute inset-0 overflow-hidden">
                   {/* Sky/Distant Background Placeholder */}
-                  <div 
-                    style={{ 
+                  <div
+                    style={{
                       animation: isMoving ? 'scrollBackground 25s linear infinite' : 'none',
-                      animationPlayState: isMoving ? 'running' : 'paused' 
+                      animationPlayState: isMoving ? 'running' : 'paused'
                     }}
                     className="absolute inset-0 w-[200%] h-1/2 flex border-b border-white/5 opacity-40"
                   >
                     <div className="w-1/2 h-full bg-[linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20),linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20)] bg-[size:100px_100px] bg-[position:0_0,50px_50px] relative">
-                        <span className="absolute top-4 left-4 text-[10px] text-white/10 uppercase">BG-START</span>
-                        <span className="absolute top-4 right-4 text-[10px] text-white/10 uppercase">BG-END</span>
+                      <span className="absolute top-4 left-4 text-[10px] text-white/10 uppercase">BG-START</span>
+                      <span className="absolute top-4 right-4 text-[10px] text-white/10 uppercase">BG-END</span>
                     </div>
                     <div className="w-1/2 h-full bg-[linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20),linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20)] bg-[size:100px_100px] bg-[position:0_0,50px_50px] relative">
-                        <span className="absolute top-4 left-4 text-[10px] text-white/10 uppercase">BG-START</span>
-                        <span className="absolute top-4 right-4 text-[10px] text-white/10 uppercase">BG-END</span>
+                      <span className="absolute top-4 left-4 text-[10px] text-white/10 uppercase">BG-START</span>
+                      <span className="absolute top-4 right-4 text-[10px] text-white/10 uppercase">BG-END</span>
                     </div>
                   </div>
 
                   {/* Ground/Road Placeholder */}
-                  <div 
-                    style={{ 
+                  <div
+                    style={{
                       animation: isMoving ? 'scrollBackground 10s linear infinite' : 'none',
                       animationPlayState: isMoving ? 'running' : 'paused'
                     }}
                     className="absolute bottom-0 left-0 w-[200%] h-1/2 flex bg-slate-900/20"
                   >
                     <div className="w-1/2 h-full border-t border-white/5 relative">
-                        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(142,213,255,0.02)_1px,transparent_1px)] bg-[size:40px_100%]" />
-                        <span className="absolute bottom-4 left-4 text-[10px] text-white/10 uppercase">GROUND-START</span>
-                        <span className="absolute bottom-4 right-4 text-[10px] text-white/10 uppercase">GROUND-END</span>
+                      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(142,213,255,0.02)_1px,transparent_1px)] bg-[size:40px_100%]" />
+                      <span className="absolute bottom-4 left-4 text-[10px] text-white/10 uppercase">GROUND-START</span>
+                      <span className="absolute bottom-4 right-4 text-[10px] text-white/10 uppercase">GROUND-END</span>
                     </div>
                     <div className="w-1/2 h-full border-t border-white/5 relative">
-                        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(142,213,255,0.02)_1px,transparent_1px)] bg-[size:40px_100%]" />
-                        <span className="absolute bottom-4 left-4 text-[10px] text-white/10 uppercase">GROUND-START</span>
-                        <span className="absolute bottom-4 right-4 text-[10px] text-white/10 uppercase">GROUND-END</span>
+                      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(142,213,255,0.02)_1px,transparent_1px)] bg-[size:40px_100%]" />
+                      <span className="absolute bottom-4 left-4 text-[10px] text-white/10 uppercase">GROUND-START</span>
+                      <span className="absolute bottom-4 right-4 text-[10px] text-white/10 uppercase">GROUND-END</span>
                     </div>
                   </div>
-                  
+
                   {/* Slower Moving Decals or Far road marks */}
-                  <div 
-                    style={{ 
+                  <div
+                    style={{
                       animation: isMoving ? 'scrollBackground 2s linear infinite' : 'none',
                     }}
                     className="absolute bottom-1/4 left-0 w-[200%] h-1 flex gap-16"
@@ -246,14 +247,14 @@ export default function App() {
                 </div>
 
                 {/* The Car Placeholder Silhouettes */}
-                <motion.div 
-                  animate={{ 
+                <motion.div
+                  animate={{
                     y: isMoving ? [0, -3, 0] : 0,
                     rotate: isCrashed ? [0, 60, 120] : 0,
                     x: isCrashed ? [0, 40] : 0,
                     filter: isCrashed ? "blur(2px) brightness(0.5)" : "none"
                   }}
-                  transition={{ 
+                  transition={{
                     y: { repeat: Infinity, duration: 0.3, ease: "easeInOut" },
                     rotate: { duration: 0.6, ease: "easeIn" },
                     x: { duration: 0.6, ease: "easeIn" }
@@ -263,24 +264,24 @@ export default function App() {
                   <div className="relative group">
                     {/* Car Silhouette - Evolves with Lives and Score */}
                     <div className="transition-all duration-700 flex items-center justify-center">
-                        {lives === 1 && <Car className="w-16 h-16 text-slate-600 drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]" />}
-                        {lives === 2 && <Car className="w-18 h-12 text-primary/80" />}
-                        {lives === 3 && <Car className="w-20 h-14 text-primary" />}
-                        {lives === 4 && <Car className="w-22 h-14 text-sky-300" />}
-                        {lives >= 5 && (
-                          <div className="relative">
-                            <Car className="w-24 h-12 text-yellow-500 scale-x-110" />
-                            <motion.div
-                              animate={{ opacity: [0, 0.5, 0] }}
-                              transition={{ repeat: Infinity, duration: 1 }}
-                              className="absolute inset-0 bg-yellow-400 blur-xl rounded-full"
-                            />
-                          </div>
-                        )}
+                      {lives === 1 && <Car className="w-16 h-16 text-slate-600 drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]" />}
+                      {lives === 2 && <Car className="w-18 h-12 text-primary/80" />}
+                      {lives === 3 && <Car className="w-20 h-14 text-primary" />}
+                      {lives === 4 && <Car className="w-22 h-14 text-sky-300" />}
+                      {lives >= 5 && (
+                        <div className="relative">
+                          <Car className="w-24 h-12 text-yellow-500 scale-x-110" />
+                          <motion.div
+                            animate={{ opacity: [0, 0.5, 0] }}
+                            transition={{ repeat: Infinity, duration: 1 }}
+                            className="absolute inset-0 bg-yellow-400 blur-xl rounded-full"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {isCrashed && (
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, scale: 0 }}
                         animate={{ opacity: [0, 1, 0], scale: [1, 2.5], y: -50 }}
                         transition={{ repeat: Infinity, duration: 0.5 }}
@@ -289,7 +290,7 @@ export default function App() {
                     )}
 
                     {isMoving && !isCrashed && (
-                      <motion.div 
+                      <motion.div
                         animate={{ opacity: [0.5, 1, 0.5], x: [-10, -15, -10] }}
                         transition={{ repeat: Infinity, duration: 0.1 }}
                         className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full w-8 h-4 bg-gradient-to-r from-orange-500 to-transparent blur-sm rounded-full"
@@ -298,9 +299,9 @@ export default function App() {
 
                     <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex gap-1">
                       {[...Array(5)].map((_, i) => (
-                        <Heart 
-                          key={i} 
-                          className={`w-3 h-3 ${i < lives ? 'fill-red-500 text-red-500' : 'text-white/10'}`} 
+                        <Heart
+                          key={i}
+                          className={`w-3 h-3 ${i < lives ? 'fill-red-500 text-red-500' : 'text-white/10'}`}
                         />
                       ))}
                     </div>
@@ -443,21 +444,21 @@ export default function App() {
             {/* Score HUD */}
             {status === 'playing' && (
               <div className="absolute top-6 left-6 z-40 flex items-center gap-6">
-                 <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-primary/60 tracking-widest mb-1">Score</span>
-                    <span className="text-2xl font-black text-white leading-none">{score}</span>
-                 </div>
-                 <div className="h-10 w-px bg-white/10" />
-                 <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-primary/60 tracking-widest mb-1">Combo</span>
-                    <span className="text-2xl font-black text-primary leading-none">x{consecutiveCorrect}</span>
-                 </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase font-bold text-primary/60 tracking-widest mb-1">Score</span>
+                  <span className="text-2xl font-black text-white leading-none">{score}</span>
+                </div>
+                <div className="h-10 w-px bg-white/10" />
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase font-bold text-primary/60 tracking-widest mb-1">Combo</span>
+                  <span className="text-2xl font-black text-primary leading-none">x{consecutiveCorrect}</span>
+                </div>
               </div>
             )}
 
             {/* Internal View Scanlines Overlay */}
             <div className="absolute inset-0 scanline opacity-[0.08] pointer-events-none" />
-            
+
             {/* Subtle Vignette */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_40%,rgba(0,0,0,0.4)_100%)] pointer-events-none" />
           </motion.div>
@@ -467,7 +468,7 @@ export default function App() {
       {/* Footer Branding - Shrunk by 60% */}
       <footer className="fixed bottom-0 left-0 w-full py-6 z-20 pointer-events-none">
         <div className="max-w-[1280px] mx-auto px-8 flex justify-center">
-          <motion.div 
+          <motion.div
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.5, duration: 0.8, ease: "circOut" }}
