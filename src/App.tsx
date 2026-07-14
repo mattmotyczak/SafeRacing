@@ -13,6 +13,7 @@ interface Question {
   question: string;
   options: string[];
   answer: number;
+  photoString?: string | null;
 }
 
 /**
@@ -63,14 +64,39 @@ export default function App() {
   const [isCrashed, setIsCrashed] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [lightState, setLightState] = useState<'red' | 'yellow' | 'green'>('red');
+  const [dbEasy, setDbEasy] = useState<Question[]>([]);
+
+  useEffect(() => {
+    async function fetchQuestions() {
+      try {
+        const res = await fetch('http://localhost:3001/api/questions/easy');
+        const data = await res.json();
+        if (data && data.length > 0) {
+          console.log("✅ Successfully loaded easy questions from NeonDB!", data);
+          setDbEasy(data);
+        } else {
+          console.warn("⚠️ NeonDB returned empty data. Falling back to local db_easy.");
+          setDbEasy(db_easy); // Fallback if DB is empty
+        }
+      } catch (err) {
+        console.error("❌ Error fetching easy questions (Server might be down). Falling back to local db_easy:", err);
+        setDbEasy(db_easy); // Fallback if server.js isn't running
+      }
+    }
+    fetchQuestions();
+  }, []);
 
   // ACA ESTA EL GENERADOR DE PREGUNTAS/RESPUESTAS !!!!!
   const getNewQuestion = useCallback(() => {
-    const db = mode === 'easy' ? db_easy : db_hard;
+    // If backend data is loaded for easy, use it; else fallback to hardcoded
+    const db = mode === 'easy' ? (dbEasy.length > 0 ? dbEasy : db_easy) : db_hard;
+    
+    if (db.length === 0) return;
+
     const randomIndex = Math.floor(Math.random() * db.length);
     setCurrentQuestion(db[randomIndex]);
     setLightState('red');
-  }, [mode]);
+  }, [mode, dbEasy]);
 
   const startGame = (selectedMode: 'easy' | 'hard') => {
     setMode(selectedMode);
@@ -388,6 +414,15 @@ export default function App() {
                     <div className="glass-panel p-6 rounded-3xl border-primary/20 shadow-2xl relative overflow-hidden backdrop-blur-3xl ring-1 ring-white/10">
                       <div className="flex flex-col sm:flex-row items-center gap-6">
                         <div className="flex-grow text-left">
+                          {currentQuestion.photoString && (
+                            <div className="mb-4">
+                              <img 
+                                src={`data:image/jpeg;base64,${currentQuestion.photoString}`} 
+                                alt="Question reference" 
+                                className="max-h-48 rounded-xl border border-white/10 shadow-lg object-contain bg-black/20"
+                              />
+                            </div>
+                          )}
                           <h3 className="text-lg sm:text-xl font-bold text-white mb-4 leading-tight">
                             {currentQuestion.question}
                           </h3>

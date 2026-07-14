@@ -11,17 +11,53 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Initialize Postgres Pool
-const pool = new pg.Pool();
+// Initialize Postgres Pool using your DATABASE_URL
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
 
-// Example endpoint to get all questions
-app.get('/api/questions', async (req, res) => {
+app.get('/api/questions/easy', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM questions');
-    res.json(result.rows);
+    const query = `
+      SELECT 
+        q."ideasyquestion", q.question, q."photostring",
+        a."ideasyanswer", a.answer, a."iscorrect"
+      FROM easy_questions q
+      JOIN easy_answers a ON q."ideasyquestion" = a."relatedtoquestion"
+    `;
+    const result = await pool.query(query);
+
+    const questionsMap = {};
+
+    result.rows.forEach(row => {
+      const qId = row.idEasyQuestion;
+
+      if (!questionsMap[qId]) {
+        questionsMap[qId] = {
+          question: row.question,
+          photoString: row.photoString,
+          options: [],
+          answer: -1
+        };
+      }
+
+      const currentQ = questionsMap[qId];
+      const optionIndex = currentQ.options.length;
+
+      currentQ.options.push(row.answer);
+
+      if (row.isCorrect) {
+        currentQ.answer = optionIndex;
+      }
+    });
+
+    res.json(Object.values(questionsMap));
   } catch (err) {
     console.error('Database error:', err);
-    res.status(500).json({ error: 'Failed to fetch questions' });
+    res.status(500).json({ error: 'Failed to fetch easy questions' });
   }
 });
 

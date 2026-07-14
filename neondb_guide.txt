@@ -1,27 +1,60 @@
 /* ==============================================================
-   1. SERVER.JS UPDATES
+   1. SERVER.JS UPDATES (HANDLING RELATIONS)
    ============================================================== */
-// Your NeonDB table stores options in separate columns (option_1, option_2, etc).
-// We need to format the data so your React app gets the exact 
-// same structure it currently uses: { question, options: [...], answer }
+// Since your data is split across two tables (easy_questions and easy_answers),
+// a single question actually has 4 rows of answers. We will use a SQL JOIN to 
+// fetch them all at once, and then group them together in Javascript so 
+// React gets the clean { question, options, answer, photoString } format.
 
-// Update your /api/questions endpoint in server.js to this:
-app.get('/api/questions', async (req, res) => {
+// Add this endpoint to your server.js
+app.get('/api/questions/easy', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM questions');
-    
-    // map() loops through every row returned by NeonDB
-    const formattedQuestions = result.rows.map(row => {
-      return {
-        mode: row.mode, // We keep 'easy' or 'hard' so we can split them on the frontend
-        question: row.question,
-        // We combine the 4 columns into a single array, exactly like your hardcoded arrays
-        options: [row.option_1, row.option_2, row.option_3, row.option_4],
-        answer: row.answer_index
-      };
+    // We JOIN the questions and answers tables on the relatedToQuestion foreign key
+    const query = `
+      SELECT 
+        q."idEasyQuestion", q.question, q."photoString",
+        a."idAnswer", a.answer, a."isCorrect"
+      FROM easy_questions q
+      JOIN easy_answers a ON q."idEasyQuestion" = a."relatedToQuestion"
+    `;
+    const result = await pool.query(query);
+
+    // Because of the JOIN, the database returns 4 rows for every 1 question.
+    // We use an object map to group those 4 rows back into a single question object.
+    const questionsMap = {};
+
+    result.rows.forEach(row => {
+      const qId = row.idEasyQuestion;
+      
+      // If we haven't seen this question yet in our loop, create its base structure
+      if (!questionsMap[qId]) {
+        questionsMap[qId] = {
+          question: row.question,
+          photoString: row.photoString, // Adding the base64 photo!
+          options: [],
+          answer: -1 
+        };
+      }
+
+      const currentQ = questionsMap[qId];
+      
+      // The index this answer will have in the options array (0, 1, 2, or 3)
+      const optionIndex = currentQ.options.length; 
+      
+      // Push the answer text into the options array
+      currentQ.options.push(row.answer);
+      
+      // If this specific answer row is marked as correct in the DB, 
+      // we record its index so React knows which option is the winner
+      if (row.isCorrect) {
+        currentQ.answer = optionIndex;
+      }
     });
 
-    // Send the perfectly formatted data back to React
+    // Object.values converts our map back into a simple array of question objects
+    const formattedQuestions = Object.values(questionsMap);
+
+    // Send the data to React!
     res.json(formattedQuestions);
   } catch (err) {
     console.error('Database error:', err);
@@ -31,29 +64,30 @@ app.get('/api/questions', async (req, res) => {
 
 
 /* ==============================================================
-   2. APP.TSX UPDATES
+   2. APP.TSX UPDATES (INTERFACE & FETCHING)
    ============================================================== */
-// Now you need to fetch this data into your React app and save it in state,
-// replacing the static db_easy and db_hard arrays.
 
-// First, add these two new state variables inside your App component (around line 67):
+// A. First, update your Question interface (around line 13) to include the photo:
+// interface Question {
+//   question: string;
+//   options: string[];
+//   answer: number;
+//   photoString?: string | null; // <-- ADD THIS
+// }
+
+// B. Next, add state and the useEffect to fetch the data when the app loads (around line 67):
 // const [dbEasy, setDbEasy] = useState<Question[]>([]);
-// const [dbHard, setDbHard] = useState<Question[]>([]);
-
-// Next, add a useEffect hook. This runs exactly ONCE when your app first loads,
-// fetching the questions from your server.js backend.
+// // (You would do the same for dbHard if you have a hard_questions table)
+//
 // useEffect(() => {
 //   async function fetchQuestions() {
 //     try {
-//       // Call your local server.js
-//       const res = await fetch('http://localhost:3001/api/questions');
+//       // Note we are calling the new endpoint for easy questions
+//       const res = await fetch('http://localhost:3001/api/questions/easy');
 //       const data = await res.json();
-//       
-//       // Split the data into easy and hard arrays and save them in state
-//       setDbEasy(data.filter((q: any) => q.mode === 'easy'));
-//       setDbHard(data.filter((q: any) => q.mode === 'hard'));
+//       setDbEasy(data);
 //     } catch (err) {
-//       console.error("Error fetching questions:", err);
+//       console.error("Error fetching easy questions:", err);
 //     }
 //   }
 //   fetchQuestions();
@@ -61,18 +95,30 @@ app.get('/api/questions', async (req, res) => {
 
 
 /* ==============================================================
-   3. MODIFY YOUR GENERATOR FUNCTION
+   3. APP.TSX UPDATES (USING THE DATA & SHOWING THE PHOTO)
    ============================================================== */
-// Finally, update your getNewQuestion function to use the state variables 
-// (dbEasy / dbHard) instead of the hardcoded ones.
 
+// A. Update your getNewQuestion function (around line 68):
 // const getNewQuestion = useCallback(() => {
-//   // Use the new state variables!
-//   const db = mode === 'easy' ? dbEasy : dbHard;
+//   // If you have dbHard, you'd toggle between them here based on `mode`
+//   const db = dbEasy;
 //   
-//   // Important safety check: If the DB is still loading, don't crash
-//   if (db.length === 0) return;
+//   if (db.length === 0) return; // DB is still loading
 //
 //   const randomIndex = Math.floor(Math.random() * db.length);
 //   setCurrentQuestion(db[randomIndex]);
-// }, [mode, dbEasy, dbHard]); // <-- Add dbEasy and dbHard to the dependency array
+// }, [dbEasy]); 
+
+// B. Display the photo in your render!
+// Down in the JSX where you render the currentQuestion (around line 340+), 
+// you can render the base64 image if it exists:
+
+// {currentQuestion.photoString && (
+//   <div className="flex justify-center mb-6">
+//     <img 
+//       src={`data:image/jpeg;base64,${currentQuestion.photoString}`} 
+//       alt="Question reference" 
+//       className="max-h-48 rounded-xl border border-white/10 shadow-lg"
+//     />
+//   </div>
+// )}
