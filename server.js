@@ -7,11 +7,10 @@ dotenv.config();
 
 const app = express();
 
-// Allow requests from your Vite frontend
 app.use(cors());
 app.use(express.json());
 
-// Initialize Postgres Pool using your DATABASE_URL
+// Genera una pool de coneccion a la DB por medio de neon
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
@@ -19,6 +18,7 @@ const pool = new pg.Pool({
   }
 });
 
+// Genera las preguntas de easy
 app.get('/api/questions/easy', async (req, res) => {
   try {
     const query = `
@@ -33,7 +33,7 @@ app.get('/api/questions/easy', async (req, res) => {
     const questionsMap = {};
 
     result.rows.forEach(row => {
-      const qId = row.idEasyQuestion;
+      const qId = row.ideasyquestion;
 
       if (!questionsMap[qId]) {
         questionsMap[qId] = {
@@ -49,7 +49,7 @@ app.get('/api/questions/easy', async (req, res) => {
 
       currentQ.options.push(row.answer);
 
-      if (row.isCorrect) {
+      if (row.iscorrect) {
         currentQ.answer = optionIndex;
       }
     });

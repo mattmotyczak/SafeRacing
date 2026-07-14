@@ -76,11 +76,11 @@ export default function App() {
           setDbEasy(data);
         } else {
           console.warn("⚠️ NeonDB returned empty data. Falling back to local db_easy.");
-          setDbEasy(db_easy); // Fallback if DB is empty
+          setDbEasy(db_easy); // Si la db de neon no tiene preguntas, usa las locales (por si el server falla)
         }
       } catch (err) {
         console.error("❌ Error fetching easy questions (Server might be down). Falling back to local db_easy:", err);
-        setDbEasy(db_easy); // Fallback if server.js isn't running
+        setDbEasy(db_easy); // Si falla al cargar las preguntas de neon, usa las locales (por si el server falla)
       }
     }
     fetchQuestions();
@@ -90,7 +90,7 @@ export default function App() {
   const getNewQuestion = useCallback(() => {
     // If backend data is loaded for easy, use it; else fallback to hardcoded
     const db = mode === 'easy' ? (dbEasy.length > 0 ? dbEasy : db_easy) : db_hard;
-    
+
     if (db.length === 0) return;
 
     const randomIndex = Math.floor(Math.random() * db.length);
@@ -416,9 +416,9 @@ export default function App() {
                         <div className="flex-grow text-left">
                           {currentQuestion.photoString && (
                             <div className="mb-4">
-                              <img 
-                                src={`data:image/jpeg;base64,${currentQuestion.photoString}`} 
-                                alt="Question reference" 
+                              <img
+                                src={`data:image/jpeg;base64,${currentQuestion.photoString}`}
+                                alt="Question reference"
                                 className="max-h-48 rounded-xl border border-white/10 shadow-lg object-contain bg-black/20"
                               />
                             </div>
