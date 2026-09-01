@@ -1,29 +1,34 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Press+Start+2P&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
-  
-  --color-background: #0b1326;
-  --color-surface: #0b1326;
-  --color-surface-dim: #0b1326;
+  --font-pixel: "Press Start 2P", ui-sans-serif, sans-serif;
+
+  --color-background: #0f0f23;
+  --color-surface: #1a1a2e;
+  --color-on-dark: #fff1e8;
+  --color-accent-red: #ff004d;
+  --color-accent-blue: #29adff;
+  --color-accent-yellow: #ffec27;
+  --color-accent-green: #00e436;
+  --color-accent-orange: #ffa300;
+  --color-accent-pink: #ff77a8;
+  --color-on-surface: #c2c8d0;
+
+  /* Legacy tokens kept for backward compatibility */
   --color-surface-bright: #31394d;
-  --color-surface-container-lowest: #060e20;
+  --color-surface-container-lowest: #1a1a2e;
   --color-surface-container-low: #131b2e;
   --color-surface-container: #171f33;
   --color-surface-container-high: #222a3d;
   --color-surface-container-highest: #2d3449;
-  
-  --color-on-surface: #dae2fd;
   --color-on-surface-variant: #bdc8d1;
-  
   --color-primary: #8ed5ff;
   --color-on-primary: #00354a;
-  --color-primary-container: #38bdf8;
-  
   --color-secondary: #b9c8de;
   --color-tertiary: #98d3ff;
-  
+
   --radius-xs: 0.25rem;
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
@@ -41,9 +46,9 @@
   .glass-panel {
     @apply bg-slate-950/40 backdrop-blur-xl border border-white/10;
   }
-  
+
   .scanline {
-    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
                 linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
     background-size: 100% 2px, 3px 100%;
   }
@@ -57,8 +62,60 @@
     to { transform: translateX(-50%); }
   }
 
-  .animate-scroll {
+  @keyframes carBounce {
+    0% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+    100% { transform: translateY(0); }
+  }
+
+  .car-aura {
+    filter: blur(12px);
+    opacity: 0.6;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.8; }
+  }
+
+  /* CarSprite moving-frame bounce — 2-frame steps() loop */
+  @keyframes carBounce {
+    0%, 49.99% { transform: translateY(0); }
+    50%, 100% { transform: translateY(3px); }
+  }
+
+  .car-bounce {
+    animation: carBounce 300ms steps(1) infinite;
+  }
+
+  /* Arcade background scroll layers — paused until isMoving adds the class */
+  .arcade-scroll-sky {
+    animation: scrollBackground 25s linear infinite;
+    animation-play-state: paused;
+  }
+
+  .arcade-scroll-ground {
     animation: scrollBackground 10s linear infinite;
+    animation-play-state: paused;
+  }
+
+  .arcade-scroll-dashes {
+    animation: scrollBackground 2s linear infinite;
+    animation-play-state: paused;
+  }
+
+  .arcade-scroll-running {
+    animation-play-state: running;
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .arcade-scroll-sky,
+  .arcade-scroll-ground,
+  .arcade-scroll-dashes,
+  .car-bounce,
+  .car-aura {
+    animation: none !important;
+  }
+}
