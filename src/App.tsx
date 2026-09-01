@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { motion, AnimatePresence } from "motion/react";
-import { Gamepad2, ShieldCheck, ChevronLeft, Trophy, Flag, AlertTriangle, Car, Zap, Heart } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { Gamepad2, ShieldCheck, ChevronLeft, Trophy, Flag, AlertTriangle } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
+import ArcadeBackground from "./components/ArcadeBackground";
+import CarSprite from "./components/CarSprite";
 
 type GameStatus = 'menu' | 'mode_selection' | 'playing' | 'game_over';
 
@@ -65,6 +67,7 @@ export default function App() {
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [lightState, setLightState] = useState<'red' | 'yellow' | 'green'>('red');
   const [dbEasy, setDbEasy] = useState<Question[]>([]);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     async function fetchQuestions() {
@@ -185,7 +188,7 @@ export default function App() {
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[150px]" />
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-tertiary/10 rounded-full blur-[150px]" />
-        <div className="absolute inset-0 opacity-[0.03] bg-[linear-gradient(to_right,#888_1px,transparent_1px),linear-gradient(to_bottom,#888_1px,transparent_1px)] bg-[size:40px_40px]" />
+        <div className="absolute inset-0 opacity-[0.03] bg-[linear-gradient(to_right,var(--color-on-surface)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-on-surface)_1px,transparent_1px)] bg-[size:40px_40px]" />
       </div>
 
       {/* Top Navigation Bar */}
@@ -210,58 +213,8 @@ export default function App() {
             {/* Infinite Runner View */}
             {status === 'playing' && (
               <div className="absolute inset-0 z-0">
-                {/* Parallax Background Illusion */}
-                <div className="absolute inset-0 overflow-hidden">
-                  {/* Sky/Distant Background Placeholder */}
-                  <div
-                    style={{
-                      animation: isMoving ? 'scrollBackground 25s linear infinite' : 'none',
-                      animationPlayState: isMoving ? 'running' : 'paused'
-                    }}
-                    className="absolute inset-0 w-[200%] h-1/2 flex border-b border-white/5 opacity-40"
-                  >
-                    <div className="w-1/2 h-full bg-[linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20),linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20)] bg-[size:100px_100px] bg-[position:0_0,50px_50px] relative">
-                      <span className="absolute top-4 left-4 text-[10px] text-white/10 uppercase">BG-START</span>
-                      <span className="absolute top-4 right-4 text-[10px] text-white/10 uppercase">BG-END</span>
-                    </div>
-                    <div className="w-1/2 h-full bg-[linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20),linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20)] bg-[size:100px_100px] bg-[position:0_0,50px_50px] relative">
-                      <span className="absolute top-4 left-4 text-[10px] text-white/10 uppercase">BG-START</span>
-                      <span className="absolute top-4 right-4 text-[10px] text-white/10 uppercase">BG-END</span>
-                    </div>
-                  </div>
-
-                  {/* Ground/Road Placeholder */}
-                  <div
-                    style={{
-                      animation: isMoving ? 'scrollBackground 10s linear infinite' : 'none',
-                      animationPlayState: isMoving ? 'running' : 'paused'
-                    }}
-                    className="absolute bottom-0 left-0 w-[200%] h-1/2 flex bg-slate-900/20"
-                  >
-                    <div className="w-1/2 h-full border-t border-white/5 relative">
-                      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(142,213,255,0.02)_1px,transparent_1px)] bg-[size:40px_100%]" />
-                      <span className="absolute bottom-4 left-4 text-[10px] text-white/10 uppercase">GROUND-START</span>
-                      <span className="absolute bottom-4 right-4 text-[10px] text-white/10 uppercase">GROUND-END</span>
-                    </div>
-                    <div className="w-1/2 h-full border-t border-white/5 relative">
-                      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(142,213,255,0.02)_1px,transparent_1px)] bg-[size:40px_100%]" />
-                      <span className="absolute bottom-4 left-4 text-[10px] text-white/10 uppercase">GROUND-START</span>
-                      <span className="absolute bottom-4 right-4 text-[10px] text-white/10 uppercase">GROUND-END</span>
-                    </div>
-                  </div>
-
-                  {/* Slower Moving Decals or Far road marks */}
-                  <div
-                    style={{
-                      animation: isMoving ? 'scrollBackground 2s linear infinite' : 'none',
-                    }}
-                    className="absolute bottom-1/4 left-0 w-[200%] h-1 flex gap-16"
-                  >
-                    {[...Array(20)].map((_, i) => (
-                      <div key={i} className="w-32 h-full bg-white/5 rounded-full" />
-                    ))}
-                  </div>
-                </div>
+                {/* Arcade Tiled Background */}
+                <ArcadeBackground isMoving={isMoving} />
 
                 {/* GUI Stoplight */}
                 <div className="absolute top-6 right-6 z-40">
@@ -272,44 +225,34 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* The Car Placeholder Silhouettes */}
+                {/* The Car — Pixel Grid Sprite */}
                 <motion.div
                   animate={{
-                    y: isMoving ? [0, -3, 0] : 0,
-                    rotate: isCrashed ? [0, 60, 120] : 0,
-                    x: isCrashed ? [0, 40] : 0,
+                    y: 0,
+                    rotate: isCrashed ? (prefersReducedMotion ? 0 : [0, 60, 120]) : 0,
+                    x: isCrashed ? (prefersReducedMotion ? 0 : [0, 40]) : 0,
                     filter: isCrashed ? "blur(2px) brightness(0.5)" : "none"
                   }}
                   transition={{
-                    y: { repeat: Infinity, duration: 0.3, ease: "easeInOut" },
                     rotate: { duration: 0.6, ease: "easeIn" },
                     x: { duration: 0.6, ease: "easeIn" }
                   }}
                   className="absolute bottom-1/4 left-1/4 -translate-x-1/2 z-20"
                 >
                   <div className="relative group">
-                    {/* Car Silhouette - Evolves with Lives and Score */}
-                    <div className="transition-all duration-700 flex items-center justify-center">
-                      {lives === 1 && <Car className="w-16 h-16 text-slate-600 drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]" />}
-                      {lives === 2 && <Car className="w-18 h-12 text-primary/80" />}
-                      {lives === 3 && <Car className="w-20 h-14 text-primary" />}
-                      {lives === 4 && <Car className="w-22 h-14 text-sky-300" />}
-                      {lives >= 5 && (
-                        <div className="relative">
-                          <Car className="w-24 h-12 text-yellow-500 scale-x-110" />
-                          <motion.div
-                            animate={{ opacity: [0, 0.5, 0] }}
-                            transition={{ repeat: Infinity, duration: 1 }}
-                            className="absolute inset-0 bg-yellow-400 blur-xl rounded-full"
-                          />
-                        </div>
-                      )}
+                    <div className="transition-all duration-700 w-28 h-16">
+                      <CarSprite
+                        isMoving={isMoving}
+                        isCrashed={isCrashed}
+                        lives={lives}
+                        className="w-full h-full"
+                      />
                     </div>
 
                     {isCrashed && (
                       <motion.div
                         initial={{ opacity: 0, scale: 0 }}
-                        animate={{ opacity: [0, 1, 0], scale: [1, 2.5], y: -50 }}
+                        animate={prefersReducedMotion ? { opacity: 1 } : { opacity: [0, 1, 0], scale: [1, 2.5], y: -50 }}
                         transition={{ repeat: Infinity, duration: 0.5 }}
                         className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 bg-slate-400 rounded-full blur-xl"
                       />
@@ -317,17 +260,17 @@ export default function App() {
 
                     {isMoving && !isCrashed && (
                       <motion.div
-                        animate={{ opacity: [0.5, 1, 0.5], x: [-10, -15, -10] }}
+                        animate={prefersReducedMotion ? { opacity: 1 } : { opacity: [0.5, 1, 0.5], x: [-10, -15, -10] }}
                         transition={{ repeat: Infinity, duration: 0.1 }}
                         className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full w-8 h-4 bg-gradient-to-r from-orange-500 to-transparent blur-sm rounded-full"
                       />
                     )}
 
                     <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex gap-1">
-                      {[...Array(5)].map((_, i) => (
-                        <Heart
+                      {Array.from({ length: 5 }, (_, i) => (
+                        <div
                           key={i}
-                          className={`w-3 h-3 ${i < lives ? 'fill-red-500 text-red-500' : 'text-white/10'}`}
+                          className={`w-3 h-3 rounded-full ${i < lives ? "bg-red-500" : "bg-white/10"}`}
                         />
                       ))}
                     </div>
@@ -348,18 +291,19 @@ export default function App() {
                     className="flex flex-col items-center"
                   >
                     <motion.div
-                      animate={{ rotate: [0, 5, -5, 0] }}
+                      animate={prefersReducedMotion ? { rotate: 0 } : { rotate: [0, 5, -5, 0] }}
                       transition={{ repeat: Infinity, duration: 4 }}
                       className="mb-8"
                     >
                       <Gamepad2 className="w-24 h-24 text-primary/40" />
                     </motion.div>
-                    <h1 className="text-5xl sm:text-7xl font-black text-white uppercase tracking-tighter mb-8 drop-shadow-2xl">
+                    <h1 className="text-5xl sm:text-7xl font-black text-white uppercase tracking-tighter mb-8 drop-shadow-2xl" style={{ fontFamily: "var(--font-pixel)" }}>
                       SafeRacing
                     </h1>
                     <button
                       onClick={() => setStatus('mode_selection')}
                       className="px-12 py-4 bg-primary text-on-primary font-black uppercase tracking-[0.2em] rounded-xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(142,213,255,0.4)]"
+                      style={{ fontFamily: "var(--font-pixel)", fontSize: "14px" }}
                     >
                       Jugar
                     </button>
@@ -374,7 +318,7 @@ export default function App() {
                     exit={{ opacity: 0, x: -20 }}
                     className="flex flex-col items-center"
                   >
-                    <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight mb-12">
+                    <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight mb-12" style={{ fontFamily: "var(--font-pixel)" }}>
                       Seleccione Modalidad
                     </h2>
                     <div className="flex flex-col sm:flex-row gap-6">
@@ -453,20 +397,22 @@ export default function App() {
                     <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mb-6 border border-red-500/20">
                       <Trophy className="w-12 h-12 text-red-500" />
                     </div>
-                    <h2 className="text-4xl sm:text-6xl font-black text-white uppercase mb-2">¡GAME OVER!</h2>
-                    <p className="text-lg text-primary font-bold uppercase tracking-[0.2em] mb-12">
+                    <h2 className="text-4xl sm:text-6xl font-black text-white uppercase mb-2" style={{ fontFamily: "var(--font-pixel)" }}>¡GAME OVER!</h2>
+                    <p className="text-lg text-primary font-bold uppercase tracking-[0.2em] mb-12" style={{ fontFamily: "var(--font-pixel)", fontSize: "14px" }}>
                       Puntaje Final: {score}
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4">
                       <button
                         onClick={() => startGame(mode)}
                         className="px-10 py-4 bg-primary text-on-primary font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all"
+                        style={{ fontFamily: "var(--font-pixel)", fontSize: "12px" }}
                       >
                         Reintentar
                       </button>
                       <button
                         onClick={() => setStatus('menu')}
                         className="px-10 py-4 glass-panel border border-white/10 text-white font-black uppercase tracking-widest rounded-xl hover:bg-white/5 transition-all"
+                        style={{ fontFamily: "var(--font-pixel)", fontSize: "12px" }}
                       >
                         Menú
                       </button>
@@ -480,13 +426,13 @@ export default function App() {
             {status === 'playing' && (
               <div className="absolute top-6 left-6 z-40 flex items-center gap-6">
                 <div className="flex flex-col">
-                  <span className="text-[10px] uppercase font-bold text-primary/60 tracking-widest mb-1">Score</span>
-                  <span className="text-2xl font-black text-white leading-none">{score}</span>
+                  <span className="text-[10px] uppercase font-bold text-primary/60 tracking-widest mb-1" style={{ fontFamily: "var(--font-pixel)" }}>Score</span>
+                  <span className="text-2xl font-black text-white leading-none" style={{ fontFamily: "var(--font-pixel)" }}>{score}</span>
                 </div>
                 <div className="h-10 w-px bg-white/10" />
                 <div className="flex flex-col">
-                  <span className="text-[10px] uppercase font-bold text-primary/60 tracking-widest mb-1">Combo</span>
-                  <span className="text-2xl font-black text-primary leading-none">x{consecutiveCorrect}</span>
+                  <span className="text-[10px] uppercase font-bold text-primary/60 tracking-widest mb-1" style={{ fontFamily: "var(--font-pixel)" }}>Combo</span>
+                  <span className="text-2xl font-black text-primary leading-none" style={{ fontFamily: "var(--font-pixel)" }}>x{consecutiveCorrect}</span>
                 </div>
               </div>
             )}
@@ -518,7 +464,7 @@ export default function App() {
 
       {/* Global Atmosphere Overlays */}
       <div className="fixed inset-0 pointer-events-none z-[100] scanline opacity-[0.015] mix-blend-overlay" />
-      <div className="fixed inset-0 pointer-events-none z-[99] bg-[radial-gradient(circle_at_center,transparent_0%,rgba(6,14,32,0.4)_100%)]" />
+      <div className="fixed inset-0 pointer-events-none z-[99] bg-[radial-gradient(circle_at_center,transparent_0%,rgba(10,10,20,0.6)_100%)]" />
     </div>
   );
 }
