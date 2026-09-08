@@ -18,27 +18,7 @@ interface Question {
   photoString?: string | null;
 }
 
-/**
- * SQL Schema Representation for Reference:
- * 
- * CREATE TABLE questions (
- *   id INTEGER PRIMARY KEY AUTOINCREMENT,
- *   mode TEXT CHECK(mode IN ('easy', 'hard')),
- *   question TEXT NOT NULL,
- *   option_1 TEXT NOT NULL,
- *   option_2 TEXT NOT NULL,
- *   option_3 TEXT NOT NULL,
- *   option_4 TEXT NOT NULL,
- *   answer_index INTEGER NOT NULL
- * );
- * 
- * INSERT INTO questions (mode, question, option_1, option_2, option_3, option_4, answer_index) VALUES
- * ('easy', '¿Qué significa la bandera roja?', 'Peligro, detener carrera', 'Última vuelta', 'Entrada a pits', 'Carrera terminada', 0),
- * ('easy', '¿Cuál es el color de la bandera de salida?', 'Roja', 'Verde', 'Cuadros', 'Amarilla', 1),
- * ('easy', '¿Qué debe hacer un piloto ante bandera amarilla?', 'Acelerando', 'Reducir velocidad y no rebasar', 'Ir a pits', 'Detener el auto inmediatamente', 1),
- * ('hard', '¿Cuál es el límite de velocidad en el Pit Lane (estándar)?', '60 km/h', '80 km/h', '100 km/h', '50 km/h', 1),
- * ('hard', '¿Qué sistema permite reducir la carga aerodinámica en rectas?', 'ERS', 'KERS', 'DRS', 'DAS', 2);
- */
+const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
 const db_easy: Question[] = [
   { question: "¿Qué significa la bandera roja?", options: ["Peligro, detener carrera", "Última vuelta", "Entrada a pits", "Carrera terminada"], answer: 0 },
@@ -67,12 +47,13 @@ export default function App() {
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [lightState, setLightState] = useState<'red' | 'yellow' | 'green'>('red');
   const [dbEasy, setDbEasy] = useState<Question[]>([]);
+  const [dbHard, setDbHard] = useState<Question[]>([]);
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     async function fetchQuestions() {
       try {
-        const res = await fetch('http://localhost:3001/api/questions/easy');
+        const res = await fetch(`${apiBase}/api/questions/easy`);
         const data = await res.json();
         if (data && data.length > 0) {
           console.log("✅ Successfully loaded easy questions from NeonDB!", data);
@@ -89,17 +70,37 @@ export default function App() {
     fetchQuestions();
   }, []);
 
+  useEffect(() => {
+    async function fetchQuestions() {
+      try {
+        const res = await fetch(`${apiBase}/api/questions/hard`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          console.log("✅ Successfully loaded hard questions from NeonDB!", data);
+          setDbHard(data);
+        } else {
+          console.warn("⚠️ NeonDB returned empty data. Falling back to local db_hard.");
+          setDbHard(db_hard);
+        }
+      } catch (err) {
+        console.error("❌ Error fetching hard questions (Server might be down). Falling back to local db_hard:", err);
+        setDbHard(db_hard);
+      }
+    }
+    fetchQuestions();
+  }, []);
+
   // ACA ESTA EL GENERADOR DE PREGUNTAS/RESPUESTAS !!!!!
   const getNewQuestion = useCallback(() => {
-    // If backend data is loaded for easy, use it; else fallback to hardcoded
-    const db = mode === 'easy' ? (dbEasy.length > 0 ? dbEasy : db_easy) : db_hard;
+    // Use backend data for the current mode when loaded; else fall back to the hardcoded array.
+    const db = mode === 'easy' ? (dbEasy.length > 0 ? dbEasy : db_easy) : (dbHard.length > 0 ? dbHard : db_hard);
 
     if (db.length === 0) return;
 
     const randomIndex = Math.floor(Math.random() * db.length);
     setCurrentQuestion(db[randomIndex]);
     setLightState('red');
-  }, [mode, dbEasy]);
+  }, [mode, dbEasy, dbHard]);
 
   const startGame = (selectedMode: 'easy' | 'hard') => {
     setMode(selectedMode);
