@@ -1,0 +1,43 @@
+# SDD bootstrap configuration — SafeRacing
+# Persistence mode: engram (declared). Phase artifacts persist to Engram as
+# sdd/{change-name}/{artifact-type}; no openspec/changes artifacts are written.
+schema: spec-driven
+artifact_store: engram
+
+context: |
+  Tech stack: React 19 + Vite 6 + TypeScript (tsc --noEmit) + Tailwind v4 + motion + lucide-react frontend;
+  Express 4 + pg + dotenv + cors backend in server.js; Neon Postgres via DATABASE_URL.
+  Architecture: single-page Spanish racing-safety quiz game (src/App.tsx) with one backend route
+  GET /api/questions/easy; hard mode still runs from hardcoded db_hard (Arc B target).
+  Testing: no test runner configured (no test script, dependencies, or config in package.json).
+  Style: camelCase, JSX in .tsx, @/* path alias, ESM ("type": "module"), plain JS in server.js.
+
+strict_tdd: false
+
+projects:
+  - path: .
+    stack: React 19 + Vite 6 + Tailwind v4 + motion + Express 4 + pg
+    test_command: ""
+    framework: none
+
+rules:
+  proposal:
+    - Include a rollback plan and success criteria.
+  specs:
+    - Use Given/When/Then for scenarios.
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY).
+  design:
+    - Document architecture decisions with rationale and tradeoffs.
+  tasks:
+    - Group by deliverable; keep tasks completable in one session.
+  apply:
+    guidelines:
+      - Follow existing code patterns (camelCase, ESM, plain JS in server.js).
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: "npm run build"
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas.
