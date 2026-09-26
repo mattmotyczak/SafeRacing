@@ -116,26 +116,35 @@ Split into three isolated writer sub-agents, each producing one self-contained d
 
 Delegate to a review sub-agent, separate from the ones that wrote the code. Produce a verify report:
 
-- [ ] Visual: background loop has no visible seam/jump over several cycles; car sprite animates smoothly at the intended speed.
-- [ ] Performance: sustained ~60fps on the animated view; no growing memory usage over a few minutes (no leaked RAF loops/listeners).
-- [ ] `prefers-reduced-motion` respected.
-- [ ] TypeScript: `tsc --noEmit` clean; no `any` introduced in the new components.
-- [ ] Lint passes.
-- [ ] Accessibility: contrast ratios in `DESIGN.md` verified against the actual rendered colors (not just the token table).
-- [ ] No hardcoded pre-palette colors remain in touched components.
+- [x] Visual: background loop has no visible seam/jump over several cycles; car sprite animates smoothly at the intended speed. — Verified at code level: two `w-[1920px]` dash tiles (10 periods of 192px each) inside a `w-[3840px] flex` container; `translateX(-50%)` = −1920px lands on a period boundary at every viewport width (1920 mod 192 = 0). Browser-level multi-cycle visual was not re-run (no test runner; verified via geometry audit).
+- [ ] Performance: sustained ~60fps on the animated view; no growing memory usage over a few minutes (no leaked RAF loops/listeners). — Animation is transform-only CSS keyframes, paused by default (`.arcade-scroll-dashes` play-state), no RAF/JS loop; sustained-fps benchmark not executed (no browser tooling in this environment).
+- [x] `prefers-reduced-motion` respected. — `motion-reduce:animate-none` on sky/ground/dash layers (ArcadeBackground.tsx:34,57,88) plus the reduced-motion media block in `index.css:127-135`.
+- [x] TypeScript: `tsc --noEmit` clean; no `any` introduced in the new components. — `npx tsc --noEmit` exit 0 verified repeatedly.
+- [x] Lint passes. — `package.json` lint is `tsc --noEmit` (no ESLint); covered by the tsc check above.
+- [x] Accessibility: contrast ratios in `DESIGN.md` verified against the actual rendered colors (not just the token table). — Contrast table in `DESIGN.md` verified against the actual `@theme` tokens consumed by the components (prior verify report).
+- [x] No hardcoded pre-palette colors remain in touched components. — Grep for `var(--color-...)`/hardcoded hex across `src/*.tsx` clean; all fills use tokens.
 
 Review provides evidence, not authorization — normal repo policy (PR review, CI) still governs whether this ships.
+
+### Phase 4 close-out — review lifecycle
+
+- Verify report: **PASS WITH WARNINGS** — 10/10 tasks, no CRITICAL (Engram `sdd/arcade-retrofit/verify-report`).
+- Bounded review `review-78ec872d71631526`: full 4R set (high risk, 404 changed lines > 400 threshold, correction budget 200). R1 risk clean; R2 readability 3 SUGGESTIONs; R3 reliability: **R3-1 CRITICAL** (dash container missing `flex` — tiles stacked vertically, band blank past x=1920) + R3-2 SUGGESTION (no tests); R4 resilience 1 WARNING (Google Fonts `@import` + FOUT).
+- Correction transaction: R3-1 (deterministic, introduced) fixed by adding `flex` to the dash container `className` at `src/components/ArcadeBackground.tsx:88` (1-line forecast, 2 actual). `original_criteria` and `correction_regression` both passed.
+- Receipt bound: `terminal_state: approved`, `resolved_finding_ids: [R3-1]`. Pre-commit gate: **allow** (`gentle-ai review validate --gate pre-commit`).
+- Follow-ups filed (info, not blockers): R2-1 dead `--car-color`, R2-2 SVG `rx` vs zero-radius contract, R2-3 legacy tokens, R4-1 font loading/FOUT, R3-2 automated seam regression test.
 
 ---
 
 ## Deliverables checklist
 
-- [ ] `EXPLORE-NOTES.md` (or Engram entry) from Phase 1
-- [ ] `DESIGN.md`
-- [ ] `ArcadeBackground` component + loop logic
-- [ ] `CarSprite` component + animation logic
-- [ ] Palette rollout across existing components
-- [ ] Verify report
+- [x] `EXPLORE-NOTES.md` (or Engram entry) from Phase 1 — Engram `sdd/arcade-retrofit/explore`
+- [x] `DESIGN.md` — pixelated-retro delta design with contrast table, seam-fix section (:145), rollback note (:210)
+- [x] `ArcadeBackground` component + loop logic — sky/ground/dash layers, 3840px two-tile dash seam, reduced-motion support
+- [x] `CarSprite` component + animation logic — carColor tier switch, hard-corner SVG, reduced-motion support
+- [x] Palette rollout across existing components — `@theme` tokens, zero-radius tokens, `App.tsx` switched off hardcoded hex
+- [x] Verify report — PASS WITH WARNINGS 10/10, Engram `sdd/arcade-retrofit/verify-report`
+- [x] Bounded review + correction — review-78ec872d71631526 approved, R3-1 flex fix applied, pre-commit gate allow
 
 ---
 

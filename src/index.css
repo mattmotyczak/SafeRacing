@@ -29,11 +29,32 @@
   --color-secondary: #b9c8de;
   --color-tertiary: #98d3ff;
 
-  --radius-xs: 0.25rem;
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.5rem;
+  /* Pixel Arcade delta tokens */
+  --color-frame-strong: #6a6a9a;
+  --color-hard-shadow: #05050c;
+  --color-danger-text: #ff2d63;
+  --color-track-line: rgba(41, 173, 255, 0.04);
+  --color-dash: rgba(255, 255, 255, 0.15);
+  --color-vignette: rgba(5, 5, 15, 0.55);
+  --color-atmosphere: rgba(10, 10, 20, 0.6);
+  --color-smoke: #8a9bb5;
+  --color-car-tier1: #64748b;
+  --color-car-tier2: #7ba7c9;
+  --color-car-tier3: #8ed5ff;
+  --color-car-tier4: #7dd3fc;
+  --color-car-tier5: #facc15;
+  --color-car-window: #bfdbfe;
+  --color-car-dark: #1e293b;
+  --color-car-damage: #ef4444;
+  --color-car-spark: #f97316;
+  --color-car-headlight: #facc15;
+
+  /* Zero every radius token — hard corners everywhere; pill-shaped exceptions are squared explicitly in App.tsx */
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
 }
 
 @layer base {
@@ -43,8 +64,9 @@
 }
 
 @layer components {
-  .glass-panel {
-    @apply bg-slate-950/40 backdrop-blur-xl border border-white/10;
+  .pixel-panel {
+    @apply bg-surface border-2 border-frame-strong;
+    box-shadow: 4px 4px 0 var(--color-hard-shadow);
   }
 
   .scanline {
@@ -54,7 +76,7 @@
   }
 
   .game-sector-glow {
-    box-shadow: inset 0 0 40px rgba(56, 189, 248, 0.05), 0 0 20px rgba(0, 0, 0, 0.5);
+    box-shadow: inset 0 0 0 2px var(--color-frame-strong), 4px 4px 0 var(--color-hard-shadow);
   }
 
   @keyframes scrollBackground {
@@ -72,9 +94,8 @@
   }
 
   .car-aura {
-    filter: blur(12px);
     opacity: 0.6;
-    animation: pulse 1.5s ease-in-out infinite;
+    animation: pulse 1.5s steps(1) infinite;
   }
 
   @keyframes pulse {

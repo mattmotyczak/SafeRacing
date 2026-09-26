@@ -23,16 +23,16 @@ export interface CarSpriteProps {
 /* ---- Lives → color tiers (mirrors original App.tsx progression) ---- */
 function carColor(lives: number): string {
   switch (lives) {
-    case 1: return "#64748b"; // dim slate
-    case 2: return "#7ba7c9"; // medium primary
-    case 3: return "#8ed5ff"; // full primary
-    case 4: return "#7dd3fc"; // sky blue
-    default: return "#facc15"; // yellow (5+)
+    case 1: return "var(--color-car-tier1)"; // dim slate
+    case 2: return "var(--color-car-tier2)"; // medium primary
+    case 3: return "var(--color-car-tier3)"; // full primary
+    case 4: return "var(--color-car-tier4)"; // sky blue
+    default: return "var(--color-car-tier5)"; // yellow (5+)
   }
 }
 
-const WINDOW = "#bfdbfe";
-const DARK = "#1e293b";
+const WINDOW = "var(--color-car-window)";
+const DARK = "var(--color-car-dark)";
 
 /* ---- Geometric pixel body via <rect>s; fill inherits from group ---- */
 interface BodyProps {
@@ -58,7 +58,7 @@ function BodyPixel({ color, windowColor, dark, offset, damage }: BodyProps) {
       {/* front bumper */}
       <rect x="2" y={y + 16} width="4" height="4" rx="1" fill={dark} />
       {/* headlights (yellow always) */}
-      <rect x="56" y={y + 14} width="6" height="4" rx="1" fill="#facc15" />
+      <rect x="56" y={y + 14} width="6" height="4" rx="1" fill="var(--color-car-headlight)" />
       {/* wheels */}
       <rect x="10" y={y + 24} width="12" height="6" rx="2" fill={dark} />
       <rect x="42" y={y + 24} width="12" height="6" rx="2" fill={dark} />
@@ -68,11 +68,11 @@ function BodyPixel({ color, windowColor, dark, offset, damage }: BodyProps) {
       {damage && (
         <>
           {/* cracked window */}
-          <rect x="22" y={y + 12} width="4" height="2" fill="#ef4444" />
+          <rect x="22" y={y + 12} width="4" height="2" fill="var(--color-car-damage)" />
           {/* sparks */}
-          <rect x="20" y={y + 2} width="2" height="2" fill="#ef4444" opacity={0.7} />
-          <rect x="30" y={y} width="2" height="2" fill="#f97316" opacity={0.7} />
-          <rect x="44" y={y} width="2" height="2" fill="#facc15" opacity={0.6} />
+          <rect x="20" y={y + 2} width="2" height="2" fill="var(--color-car-damage)" opacity={0.7} />
+          <rect x="30" y={y} width="2" height="2" fill="var(--color-car-spark)" opacity={0.7} />
+          <rect x="44" y={y} width="2" height="2" fill="var(--color-car-headlight)" opacity={0.6} />
         </>
       )}
     </g>

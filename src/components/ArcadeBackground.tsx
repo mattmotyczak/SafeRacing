@@ -19,7 +19,10 @@ const tileGradient = [
   "linear-gradient(45deg,var(--color-surface) 25%,transparent 25%,transparent 75%,var(--color-surface) 75%,var(--color-surface))",
 ].join(",");
 
-const groundGradient = "linear-gradient(90deg,rgba(41,173,255,0.04) 1px,transparent 1px)";
+const groundGradient = "linear-gradient(90deg,var(--color-track-line) 1px,transparent 1px)";
+
+const dashGradient =
+  "repeating-linear-gradient(90deg,var(--color-dash) 0 128px,transparent 128px 192px)";
 
 export default function ArcadeBackground({ isMoving, className = "" }: ArcadeBackgroundProps) {
   const scrollState = isMoving ? "arcade-scroll-running" : "";
@@ -74,14 +77,33 @@ export default function ArcadeBackground({ isMoving, className = "" }: ArcadeBac
         </div>
       </div>
 
-      {/* Road dashes — fast scrolling lane markings */}
+      {/* Road dashes — fast scrolling lane markings. Periodic 192px gradient on
+          TWO FIXED 1920px (10-period) tiles inside a 3840px container. Seamless
+          wrapping requires tile width ≡ 0 (mod 192px): 1920 = 10 × 192, so
+          translateX(-50%) pans exactly one container half (1920px = 10 periods)
+          and the A/B boundary lands on a period boundary at every viewport
+          width. A w-1/2 tile (width = panel width, e.g. 1100px) is NOT
+          period-aligned (1100 mod 192 = 140) and shows a seam. */}
       <div
-        className={`arcade-scroll-dashes ${scrollState} absolute bottom-1/4 left-0 w-[200%] h-1 flex gap-16 motion-reduce:animate-none`}
+        className={`arcade-scroll-dashes ${scrollState} absolute bottom-1/4 left-0 w-[3840px] h-1 flex motion-reduce:animate-none`}
         aria-hidden
       >
-        {Array.from({ length: 20 }, (_, i) => (
-          <div key={i} className="w-32 h-full bg-white/5 rounded-full" />
-        ))}
+        <div
+          className="w-[1920px] h-full"
+          style={{
+            backgroundImage: dashGradient,
+            backgroundSize: "1920px 100%",
+            backgroundRepeat: "repeat",
+          }}
+        />
+        <div
+          className="w-[1920px] h-full"
+          style={{
+            backgroundImage: dashGradient,
+            backgroundSize: "1920px 100%",
+            backgroundRepeat: "repeat",
+          }}
+        />
       </div>
     </div>
   );
