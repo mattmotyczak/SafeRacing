@@ -1,297 +1,155 @@
-# ORCHESTRATOR.md — SafeRacing: Arcade Retrofit + Backend / Data-Layer Rigor
+# ORCHESTRATOR.md — SafeRacing
 
 ## Purpose
 
-This file orchestrates autonomous, multi-phase implementation sessions for **SafeRacing** (a Spanish racing-safety quiz game: React 19 + Vite 6 + Tailwind v4 + motion frontend, Express + Neon Postgres backend). It's written to run under the **gentle-ai** SDD (Spec-Driven Development) orchestrator on top of **OpenCode**, using OpenCode's native skill loading, Plan/Build modes, and — if configured — Engram for persistent cross-session memory.
+This file orchestrates spec-driven work on **SafeRacing**: a Spanish racing-safety quiz game. React 19 + Vite 6 + Tailwind v4 + motion frontend, Express 4 + Neon Postgres backend. Built as a final university project by Team Foxtrot.
 
-Target stack: **HTML, JavaScript, TypeScript, React, Node/Express, PostgreSQL (Neon)**.
+It runs under the **gentle-ai SDD orchestrator** on top of **OpenCode**, using OpenCode's native skill loading and Plan/Build modes.
 
-Two independent arcs share this file:
+## Artifact store: OpenSpec, not Engram
 
-- **Arc A — Arcade Retrofit (Phases 0–4, DONE):** pixel-arcade visual redesign. Implemented and verified on branch `new_designs` (commits `89d4174` → `b2e635e`). Keep these phases as reference — do not modify.
-- **Arc B — Backend & Data-Layer Rigor (Phases 5–9, PENDING):** close the gaps found during the Arc A review — wire hard mode to the database, version the schema as migrations, and clean stale artifacts.
+**SDD artifacts are files in this repo, not Engram observations.** Configured in `openspec/config.yaml` as `artifact_store: openspec`.
 
-## Scope of Arc B (this extension)
+| Artifact | Path |
+|----------|------|
+| Source of truth (merged specs) | `openspec/specs/{domain}/spec.md` |
+| Active change | `openspec/changes/{change-name}/` |
+| DAG state (survives compaction) | `openspec/changes/{change-name}/state.yaml` |
+| Completed change | `openspec/changes/archive/YYYY-MM-DD-{change-name}/` |
 
-1. Analyze the existing codebase (rendering approach, current theming, component structure).
-2. Design and document a modernized, arcade-style color scheme in `DESIGN.md`.
-3. Implement a seamless looping background.
-4. Implement an animated car sprite.
-5. Verify the result (visual, performance, type-safety, accessibility).
-6. **Audit the live Neon schema** and the single `/api/questions/easy` endpoint; confirm whether `hard_questions`/`hard_answers` exist.
-7. **Wire hard mode ("Realista") to the database** — today it runs from the hardcoded `db_hard` in `App.tsx`.
-8. **Version the schema** as SQL migrations in the repo (currently zero `.sql` files; only `neondb_guide.txt` documents it).
-9. **Clean stale artifacts:** empty `src/db.ts`, the obsolete SQL comment block in `App.tsx`, AI Studio template leftovers in `README.md`/`metadata.json`, hardcoded `http://localhost:3001`.
-10. Verify end-to-end: both modes served from Neon, migrations idempotent, docs accurate.
+Per-phase files follow the standard layout: `exploration.md`, `proposal.md`, `specs/{domain}/spec.md`, `design.md`, `tasks.md`, `verify-report.md`.
 
----
+### Why this changed
 
-## 0. Operating rules (apply for the whole session)
+The project previously ran with `artifact_store: engram`. That mode upserts by `topic_key`, so re-running a phase **overwrote** the previous version with no revision history, the artifacts never entered git, and they were not shareable with the team. The entire record of Arc A existed as nine local Engram observations plus a single archive report — invisible to anyone cloning the repo.
 
-- **Work autonomously** through the phases below without pausing for confirmation, except where explicitly marked `[BLOCKING]`.
-- **First action**: if the orchestrator doesn't already have write/run access to this repo (shell, file write, package manager), request it from the operator before doing anything else. This is the only upfront blocking step.
-- **4-file rule**: if understanding the current rendering/animation flow requires reading 4+ files, delegate that reading to an explore sub-agent instead of doing it inline in the parent thread.
-- **Multi-file write rule**: any phase touching 2+ non-trivial files runs through a single writer sub-agent, followed by a fresh reviewer pass before being marked done.
-- **Incident rule**: after any wrong-directory error, failed build, or confusing test/lint output, stop and re-run a short audit (repo root check, `git status`, install state) before continuing.
-- **Long-session rule**: after roughly 20 tool calls, or 5 exploratory reads, or 2 non-mechanical edits, pause, summarize progress, and either delegate the next chunk or re-plan.
-- Parent/orchestrator thread stays thin: it tracks phase state and summaries; sub-agents do the actual reading/writing.
-- If Engram (or equivalent persistent memory) is available, save at minimum: the chosen palette, the sprite/animation architecture decision, and each phase's verify notes — e.g. under keys like `sdd/arcade-retrofit/design`, `sdd/arcade-retrofit/apply-progress`, `sdd/arcade-retrofit/verify-report`.
+On **2026-09-26** the store switched to `openspec` and every surviving Engram artifact was migrated into files (see the "Migrated artifacts" section below).
 
----
+**Engram is still fine for ad-hoc memory** — bugfixes, discoveries, session summaries. It is not the artifact store for SDD phases. If an SDD phase tells you to `mem_save` an artifact, it is reading a stale mode; write the file instead.
 
-## Phase 1 — Explore: Codebase Analysis *(sdd-explore)*
+## Current state
 
-Delegate to an explore sub-agent. Deliverable: a short written inventory, not code changes.
+Branch `new_designs`, HEAD `1e616d0`, in sync with `origin/new_designs`. **`main` has received none of this work.**
 
-Inventory:
+| Arc | Scope | Status |
+|-----|-------|--------|
+| A | Arcade Retrofit — pixelated retro (8-bit) visual redesign | **Shipped, verified, reviewed, archived** |
+| B | Backend & Data-Layer Rigor — migrations, unified API, hard mode from DB | **Shipped; data layer now verified** — see below |
+| C | Cartoon daytime road scene + dimmed blurred backdrop | **Proposed only — not started** |
 
-- **Rendering approach** for anything visual/animated today: plain DOM + CSS, `<canvas>`, or SVG — and which is used where.
-- **Existing animation loops**, if any: CSS `@keyframes`/`animation`, `requestAnimationFrame` usage, any game-loop/ticker abstraction already present.
-- **Current theming**: where colors live (CSS custom properties, Tailwind config, styled-components theme, or hardcoded hex values scattered across components). This determines how disruptive the palette change will be.
-- **Component structure**: which React components should host the background and the car (a `<GameCanvas>`, `<Hero>`, or page-level component?), and their current props/state shape in TypeScript.
-- **Asset pipeline**: how images/sprite sheets are currently imported and served, and whether a car sprite asset already exists or needs to be created/sourced.
-- **Performance budget**: any existing constraints (Lighthouse targets, low-end device support) the looping background/sprite must respect.
+Arc B's nine skipped Phase 8 checks have since been executed against the live database. Verified: both endpoints return the unified contract from a live database; migration idempotency under double-apply; a fresh-database bootstrap through a transactional throwaway-schema probe (22/22, three runs, zero residue). One check remains genuinely unverified — hard mode drawing from the DB rather than `db_hard` is confirmed only indirectly, by the returned option order matching the live scrambled primary keys rather than the authored order in `App.tsx`. The `fresh-db-bootstrap` change also fixed a second defect found along the way: seeded answer order was planner-dependent, so a freshly seeded database served a different option order than `db_easy`.
 
-Output: a short `EXPLORE-NOTES.md` (or equivalent Engram entry) summarizing the above — used as input to Phase 2.
+### Verified project facts
 
----
+Read `openspec/specs/game/spec.md` and `openspec/specs/data-layer/spec.md` for the full requirement sets. The essentials:
 
-## Phase 2 — Design: Arcade Palette & `DESIGN.md` *(sdd-design)*
+- `src/App.tsx` (484 lines) is a single page with a four-state machine — `menu | mode_selection | playing | game_over` — and one `useEffect` fetcher per mode.
+- Rendering is pure DOM/CSS plus one inline SVG. No canvas, no `requestAnimationFrame`, no JS animation loop anywhere.
+- `GET /api/questions/:mode` serves both modes from one route, mapping mode → table pair through `MODE_CONFIG` in `server.js:28-41` and grouping JOINed rows via `groupQuestions()` in `server.js:46-72`.
+- Both modes keep a 5-question hardcoded fallback in `App.tsx` so the game is playable with the backend down. This is deliberate, documented behavior.
+- The live `easy_*` tables hold **7** questions against the 5 in the repo — two are `Test` / `Second Test` smoke-test residue, and `Test` is served to players. See gap 1.
+- All sixteen live columns are lowercase. `neondb_guide.txt`'s quoted CamelCase form was never executed.
+- **There is no test runner.** No test script, no test dependency, no config. Verification is `npx tsc --noEmit`, grep audits, contrast/geometry math written into the artifacts, and — for the data layer — a transactional throwaway-schema probe. Do not plan work that assumes a test suite exists.
 
-Delegate to a design sub-agent, using the Phase 1 notes as input.
+## Operating rules
 
-Requirements for the new color scheme:
+- **Read the specs first.** `openspec/specs/` is the source of truth. If code and spec disagree, the code is the bug — or the spec is stale; determine which before editing either.
+- **Request access up front** if the orchestrator lacks write/run access to the repo. This is the only blocking step.
+- **4-file rule** — if understanding a flow needs 4+ files, delegate the reading to an explore sub-agent rather than reading inline in the parent thread.
+- **Multi-file write rule** — any change touching 2+ non-trivial files goes through a single writer sub-agent, then a fresh reviewer pass.
+- **Incident rule** — after any wrong-directory error, failed build, or confusing lint output, stop and re-audit (repo root, `git status`, install state) before continuing.
+- **Long-session rule** — after ~20 tool calls, 5 exploratory reads, or 2 non-mechanical edits: pause, summarize, then delegate or re-plan.
+- Keep the parent thread thin. It tracks state and summaries; sub-agents do the reading and writing.
+- **Never introduce a hardcoded hex or `rgba()` in `src/**/*.tsx`.** Use an `@theme` token. The only exception is the traffic-light utilities and the three stoplight glow shadows at `App.tsx:226-228`.
+- **Never add a runtime dependency** without recording the tradeoff in `design.md`. The repo's zero-dependency posture is a deliberate, documented choice — `db/apply.js` is hand-rolled rather than pulling in `node-pg-migrate` for exactly this reason.
 
-- Arcade/retro-neon direction: saturated primary + secondary hues (e.g. magenta/cyan/electric-blue family), a dark near-black background rather than plain white/gray, and one accent "highlight" color reserved for interactive/CTA elements.
-- Maintain **WCAG AA contrast** (4.5:1 for body text, 3:1 for large text/UI) between text/background pairs — hard constraint, not a suggestion.
-- Express the palette as **design tokens** (CSS custom properties, or the project's existing token mechanism from Phase 1) — not one-off hex values inside components.
+## Open gaps, in priority order
 
-Produce `DESIGN.md` at the repo root with, at minimum:
+These are the real outstanding items. Everything else is done.
 
-```markdown
-# DESIGN.md
+### 1. Live `easy_*` tables contain smoke-test rows — HIGH
 
-## Palette
-| Token              | Value | Usage                       |
-|---------------------|-------|------------------------------|
-| --color-bg           | #...  | App background               |
-| --color-primary      | #...  | Primary brand / UI accents   |
-| --color-secondary    | #...  | Secondary accents            |
-| --color-highlight    | #...  | CTAs, active states          |
-| --color-text         | #...  | Body text (AA on --color-bg) |
+The live database has two rows in `easy_questions` that are development residue:
 
-## Typography
-(existing or updated type scale, if touched)
+| id | question | answers | note |
+|----|----------|---------|------|
+| 1 | `Test` | 4 (`prueba exitosa` correct, 3× `prueba fallida`) | **served to players**, plus a 42,420-byte base64 photo |
+| 2 | `Second Test` | 0 | invisible — the `INNER JOIN` filters it |
 
-## Background loop
-- Technique: [CSS transform loop | canvas tile loop]
-- Loop unit width/height, seam-matching approach, scroll speed
+`Test` is returned by `GET /api/questions/easy`, so a player has a **1-in-6 chance** of drawing a nonsense question with a random image. Easy mode serves 6 questions where the repo models 5.
 
-## Car sprite
-- Source: sprite sheet [dimensions] x [frame count], or SVG frame set
-- Animation technique: [CSS steps() | requestAnimationFrame frame-stepping]
-- States: idle / driving / (optional: boost, crash)
+`Second Test` is harmless today precisely because it has no answers, which is a fragile thing to rely on — a single answer row would make it visible with an empty or `-1` option set.
 
-## Accessibility notes
-Contrast ratios for each text/background pairing above.
-```
+**Fix:** delete both rows and their answers. That is production data deletion, so it needs explicit sign-off rather than an agent's judgement. Until then, note that `db_easy` in `src/App.tsx` and the live easy table disagree on question count.
 
-Sub-agent review before moving on: confirm contrast ratios pass AA, and that the chosen background/sprite techniques are compatible with the rendering approach found in Phase 1 (don't propose canvas if the rest of the app is pure CSS/DOM, unless justified).
+### 2. Live answer primary keys are interleaved, so online and offline option order differ — MEDIUM
 
----
+Because the live `easy_answers` primary keys are scattered across questions, the live easy option order differs from `db_easy` for **every** question. Each response is internally consistent and the correct answer is always identified, so the game is never wrong — but the online and offline experience of one question are not the same, which undercuts the offline fallback's role as a mirror.
 
-## Phase 3 — Implement *(sdd-tasks → sdd-apply)*
+The `fresh-db-bootstrap` change fixed this for *freshly seeded* databases by pinning seed order. Reordering existing rows needs a destructive migration (rewrite PKs, or add a display-ordinal column) — a separate, explicitly-approved change.
 
-Split into three isolated writer sub-agents, each producing one self-contained diff, reviewed before merge:
+### 3. `neondb_guide.txt` documents the wrong schema — MEDIUM (downgraded from HIGH)
 
-**3a. Looping background**
-- Implement as a dedicated component (e.g. `ArcadeBackground.tsx`), typed with TS.
-- Seamless loop: duplicate the background unit and translate both copies together, resetting the translation by exactly one unit-width on wrap (no visible seam/jump). If canvas-based, redraw a tiled pattern per frame instead.
-- Drive the loop off a single `requestAnimationFrame` ticker (or CSS animation, per the Phase 2 decision) — no duplicate tickers per component.
-- Respect `prefers-reduced-motion`: pause or drastically slow the loop when that OS setting is on.
-- Clean up the animation frame/listener on unmount.
+It shows a single `questions` table with inline options, quoted CamelCase identifiers (`q."idEasyQuestion"`), and an `idAnswer` column that does not exist. It contradicts `db/migrations/0001_bootstrap.sql` and `server.js`.
 
-**3b. Car sprite**
-- Implement as a typed component (e.g. `CarSprite.tsx`) accepting at least a `speed`/`state` prop.
-- Frame-stepping via the technique chosen in `DESIGN.md`. If using a sprite sheet, load it once (not per-render) and step through frames on an interval tied to speed.
-- Positioned in front of the looping background, aligned to it (same ground line).
+**It is no longer a live hazard.** Read-only `information_schema` introspection confirmed all sixteen live columns are lowercase with the documented types, so the quoted CamelCase snippet was never executed against this database. It is stale documentation only. Delete it or replace it with a pointer to `db/migrations/`.
 
-**3c. Palette rollout**
-- Replace old color tokens/hardcoded hex values found in Phase 1 with the new `DESIGN.md` tokens across affected components.
-- No leftover hardcoded colors duplicating a token.
+### 4. No repeatable data-layer verification — MEDIUM
 
----
+The data layer is verified, but only by ad-hoc scripts that were written, run, and deleted. There is no durable way to re-check the schema, the seed, or the endpoint contract after a change. A committed script is the obvious answer, but the one written for `fresh-db-bootstrap` hardcodes expected row counts and would rot the moment a question is added — so it needs a count-free invariant design first (every question has ≥2 answers and exactly one correct; the ordinal column is contiguous; the endpoint contract holds for both modes).
 
-## Phase 4 — Verify *(sdd-verify)*
+Until that exists, the technique is documented in `openspec/changes/archive/2026-09-26-fresh-db-bootstrap/verify-report.md` and is reproducible on demand.
 
-Delegate to a review sub-agent, separate from the ones that wrote the code. Produce a verify report:
+### 5. `answer` index is positional — LOW
 
-- [x] Visual: background loop has no visible seam/jump over several cycles; car sprite animates smoothly at the intended speed. — Verified at code level: two `w-[1920px]` dash tiles (10 periods of 192px each) inside a `w-[3840px] flex` container; `translateX(-50%)` = −1920px lands on a period boundary at every viewport width (1920 mod 192 = 0). Browser-level multi-cycle visual was not re-run (no test runner; verified via geometry audit).
-- [ ] Performance: sustained ~60fps on the animated view; no growing memory usage over a few minutes (no leaked RAF loops/listeners). — Animation is transform-only CSS keyframes, paused by default (`.arcade-scroll-dashes` play-state), no RAF/JS loop; sustained-fps benchmark not executed (no browser tooling in this environment).
-- [x] `prefers-reduced-motion` respected. — `motion-reduce:animate-none` on sky/ground/dash layers (ArcadeBackground.tsx:34,57,88) plus the reduced-motion media block in `index.css:127-135`.
-- [x] TypeScript: `tsc --noEmit` clean; no `any` introduced in the new components. — `npx tsc --noEmit` exit 0 verified repeatedly.
-- [x] Lint passes. — `package.json` lint is `tsc --noEmit` (no ESLint); covered by the tsc check above.
-- [x] Accessibility: contrast ratios in `DESIGN.md` verified against the actual rendered colors (not just the token table). — Contrast table in `DESIGN.md` verified against the actual `@theme` tokens consumed by the components (prior verify report).
-- [x] No hardcoded pre-palette colors remain in touched components. — Grep for `var(--color-...)`/hardcoded hex across `src/*.tsx` clean; all fills use tokens.
+`answer` is not a stored column. `groupQuestions()` derives it from row arrival order, which the query pins with `ORDER BY` on the answers primary key. It is deterministic today, but it is an implicit contract: renumbering answer rows silently changes every question's correct-option index. A stored ordinal, or an `ORDER BY` on a stable semantic column, would make it explicit. The `ord` column added to the seed data is a step in that direction but is not persisted.
 
-Review provides evidence, not authorization — normal repo policy (PR review, CI) still governs whether this ships.
+### 6. Carried-over Arc A follow-ups — LOW
 
-### Phase 4 close-out — review lifecycle
+Still open, none blocking:
 
-- Verify report: **PASS WITH WARNINGS** — 10/10 tasks, no CRITICAL (Engram `sdd/arcade-retrofit/verify-report`).
-- Bounded review `review-78ec872d71631526`: full 4R set (high risk, 404 changed lines > 400 threshold, correction budget 200). R1 risk clean; R2 readability 3 SUGGESTIONs; R3 reliability: **R3-1 CRITICAL** (dash container missing `flex` — tiles stacked vertically, band blank past x=1920) + R3-2 SUGGESTION (no tests); R4 resilience 1 WARNING (Google Fonts `@import` + FOUT).
-- Correction transaction: R3-1 (deterministic, introduced) fixed by adding `flex` to the dash container `className` at `src/components/ArcadeBackground.tsx:88` (1-line forecast, 2 actual). `original_criteria` and `correction_regression` both passed.
-- Receipt bound: `terminal_state: approved`, `resolved_finding_ids: [R3-1]`. Pre-commit gate: **allow** (`gentle-ai review validate --gate pre-commit`).
-- Follow-ups filed (info, not blockers): R2-1 dead `--car-color`, R2-2 SVG `rx` vs zero-radius contract, R2-3 legacy tokens, R4-1 font loading/FOUT, R3-2 automated seam regression test.
+| ID | Finding |
+|----|---------|
+| R2-1 | `--car-color` custom property is set in `CarSprite.tsx:92` and never consumed |
+| R2-2 | SVG `<rect>` `rx` attributes contradict the zero-radius / hard-corner contract |
+| R2-3 | Legacy `@theme` tokens still present at `index.css:19-30` |
+| R4-1 | Google Fonts `@import` at `index.css:1` — FOUT reflow vs the no-layout-shift claim in `DESIGN.md` |
+| R3-2 | No automated seam regression test — there is no test runner |
+| — | `AnimatePresence` entrance transitions are not gated on `prefers-reduced-motion` |
+| — | `bg-slate-900/20` on the ground layer could be promoted to a token |
 
----
+## Migrated artifacts
 
-# ARC B — Backend & Data-Layer Rigor (PENDING)
+Written on 2026-09-26 from Engram observations, which are retained for traceability:
 
-Known gaps from the Arc A review (2026-09-08):
-- `GET /api/questions/easy` is the **only** endpoint; hard mode ("Realista") still uses hardcoded `db_hard` in `App.tsx`.
-- The Neon schema is **not versioned**: zero `.sql`/migration files in the repo; the real schema is `easy_questions` (ideasyquestion, question, photostring) JOIN `easy_answers` (ideasyanswer, answer, iscorrect, relatedtoquestion).
-- The SQL comment block in `App.tsx` (lines ~22–41) documents a **different, wrong schema** (single `questions` table with inline options) and contradicts reality.
-- `src/db.ts` is an **empty dead file**.
-- `README.md` and `metadata.json` still describe the default AI Studio telemetry dashboard template.
-- Frontend fetches hardcoded `http://localhost:3001/...` — no env var for the API base URL.
-- No SQL migrations, no verify report for the data layer.
+| Folder | From | Contents |
+|--------|------|----------|
+| `openspec/changes/archive/2026-09-01-arcade-retrofit/` | obs #39, #42–#47, #51, #52 | `state.yaml`, `verify-report.md`, `archive-report.md` (incl. the reconstructed task list) |
+| `openspec/changes/archive/2026-09-26-backend-data-rigor/` | nothing — reconstructed from commit `de74dbe` | `state.yaml`, `archive-report.md` |
+| `openspec/changes/arcade-scene-backdrop/` | obs #54 | `state.yaml`, `exploration.md` |
 
----
+Arc A's design was never a separate artifact — it was written straight to the repo's `DESIGN.md`, which remains the canonical design document. The current `openspec/specs/game/spec.md` is the post-merge source of truth.
 
-## Phase 5 — Explore: Backend & Data-Layer Audit *(sdd-explore)*
+**Commit attribution correction:** the old file recorded Arc A as `89d4174` → `b2e635e`. Those commits are the palette tokens and the initial `ArcadeBackground` / `CarSprite` extraction. The pixelated-retro delta itself — the `DESIGN.md` rewrite, `.glass-panel` → `.pixel-panel`, the 2× integer sprite scale, and the 3840 px dash seam fix — landed in **`e3ab269`**, after Arc B's `de74dbe`.
 
-Delegate to an explore sub-agent. Deliverable: a written inventory, not code changes.
+## Next change: `arcade-scene-backdrop`
 
-Inventory:
+Proposed, specced at plan level, not started. Read `openspec/changes/arcade-scene-backdrop/exploration.md`.
 
-- **Live Neon schema**: query/pull the actual DDL for `easy_questions` and `easy_answers` (exact column names, types, constraints). Confirm whether `hard_questions` / `hard_answers` already exist or must be created.
-- **Row counts & photo size**: how many questions per table; is `photostring` base64 stored inline, and how large.
-- **Backend surface**: every route in `server.js`, the `pg.Pool` config, env vars consumed (`DATABASE_URL`), error handling.
-- **Frontend data wiring**: every place `App.tsx` fetches or falls back; the `mode` → data-source mapping; confirmation that `db_hard` is the only source for "Realista".
-- **Stale artifacts list**: enumerate `src/db.ts`, the obsolete SQL comment in `App.tsx`, `README.md`, `metadata.json`, `.env.example` contents (allowed — it's committed), and all hardcoded base-URL sites in `src/`.
-- **Migration tooling**: none present today — note whether `pg-migrate`, `node-pg-migrate`, or a plain `db/migrations/*.sql` folder is most consistent with the zero-dependency leaning of this repo.
+Replace the abstract in-game gradient background with a daytime cartoon pixel landscape — sky, sun, clouds, far hills, trees, road with rumble strips — and render a dimmed copy of the same scene as the out-of-game page backdrop.
 
-Output: extend/refresh the `EXPLORE-NOTES.md` (or an Engram entry) with the schema DDL, endpoint list, and artifact inventory — input to Phase 6.
+Three things carry over from Arc A and must not regress:
 
----
+1. **The periodicity rule.** Every layer's period must divide 1920 px, or the wrap seams. The dash layer's `w-[3840px]` flex container and the `flex` class at `ArcadeBackground.tsx:88` (the R3-1 fix) stay exactly as they are.
+2. **The zero-blur contract.** The blur comparison toggle must default to a pixel-block SVG filter, not a real `blur()`. Everything belonging to the toggle — button, state, filter classes, hidden SVG `<filter>` defs — must be marked `/* DEBUG-DELETABLE */` with a removal guideline.
+3. **Token discipline.** New `--color-scene-*` tokens in `@theme`; no hex in `.tsx`.
 
-## Phase 6 — Design: Schema Versioning & Backend API *(sdd-design)*
+## Working agreement for future changes
 
-Delegate to a design sub-agent, using the Phase 5 notes as input. Append the decisions to this same `ORCHESTRATOR.md` (keep history, just extend) and to `DESIGN.md`.
-
-Decisions to lock (with tradeoffs — recommend one per row):
-
-| Decision | Options | Tradeoff | Recommended |
-|----------|---------|----------|-------------|
-| Hard tables | (A) Mirror `hard_questions`/`hard_answers`, (B) generic `questions`/`answers` + `mode` column | (A) zero disruption to live easy data, consistent with existing JOIN logic; (B) cleaner but requires migrating live easy rows | **(A) Mirror schema** — easy is live with data; `db_hard`'s 5 questions become seed rows |
-| Migration format | (A) Plain `db/migrations/NNNN_*.sql` + a runner script, (B) `node-pg-migrate`, (C) schema.sql single file | (A) zero new deps, git-versioned, idempotent `IF NOT EXISTS`; (B) maturity but new dependency + API to learn; (C) simplest but no incremental history | **(A) Plain sequential SQL files** — matches the no-dependency posture; a 10-line Node runner or manual `psql` apply |
-| API shape | (A) `GET /api/questions/:mode`, (B) keep `/easy` + add `/hard`, (C) `/api/questions?mode=x` | (A) one route, mode param validated against `['easy','hard']`; (B) mirrors current code, minimal change; (C) query strings for filters | **(A) `GET /api/questions/:mode`** — single validated route, the mode toggle stays in the URL path |
-| Response contract | One shape for both modes: `{ question, options[], answer, photoString }` | Guarantees the frontend can treat easy/hard identically | **Unified contract** — App.tsx already consumes exactly this shape from easy |
-| API base URL | (A) `VITE_API_BASE_URL` env var with `http://localhost:3001` default, (B) relative proxy via Vite | (A) explicit, works for deployed client/server split; (B) cleaner in dev, needs Vite proxy config | **(A) `VITE_API_BASE_URL`** — explicit; default to localhost for dev, documented in `.env.example` |
-| Photostring | (A) Keep base64 in DB, (B) move to hosted media URLs | (A) zero migration of existing rows, works offline; (B) smaller payloads but needs storage + URL rewriting | **(A) Keep base64** — pragmatic for a final-project scope; document max size |
-
-Schema sketch to validate in Phase 7 (mirrors live easy DDL):
-
-```sql
-CREATE TABLE IF NOT EXISTS hard_questions (
-  idHardQuestion  SERIAL PRIMARY KEY,
-  question        TEXT NOT NULL,
-  photoString     TEXT
-);
-
-CREATE TABLE IF NOT EXISTS hard_answers (
-  idHardAnswer    SERIAL PRIMARY KEY,
-  answer          TEXT NOT NULL,
-  isCorrect       BOOLEAN NOT NULL DEFAULT FALSE,
-  relatedToQuestion INTEGER NOT NULL REFERENCES hard_questions(idHardQuestion)
-);
-```
-
-Seed goal: the 5 hardcoded `db_hard` questions in `App.tsx` must become seed rows, so the frontend can drop `db_hard` entirely.
-
----
-
-## Phase 7 — Implement *(sdd-tasks → sdd-apply)*
-
-Split into isolated writer sub-agents, each with its own self-contained diff, reviewed before merge:
-
-**7a. Migrations & seed data**
-- Create `db/migrations/0001_easy_schema.sql` (idempotent `IF NOT EXISTS` for `easy_questions`/`easy_answers` — matches the live DDL from Phase 5, no data loss).
-- Create `db/migrations/0002_hard_schema.sql` and `0003_hard_seed.sql` — the discussed schema + the 5 `db_hard` questions as seed rows.
-- If live Neon already has the hard tables, produce `0002` as compatibility/no-op guard and seed explicitly with `ON CONFLICT DO NOTHING` (define a natural-uniqueness guard, e.g. dedupe on `question` text, or document that you must not re-run seeds).
-- Add a minimal, dependency-free runner (`db/apply.js` or documented `psql` commands in `db/README.md`) — no new npm packages.
-- The seed data must be extracted from `App.tsx` `db_hard` verbatim (same questions, options, answer indices, order randomized later).
-
-**7b. Backend endpoints**
-- Refactor `server.js` only as much as Phase 6 decided: implement `GET /api/questions/:mode` validating `mode ∈ {easy, hard}`, reusing the existing JOIN + JS grouping logic via a shared helper (extract the current `easy`-only grouping into `groupQuestions(rows)`).
-- Keep the existing `/api/questions/easy` route working (or deprecate with a `console.warn` only if the frontend stops using it — do not break it).
-- Preserve the `catch → 500 { error }` pattern and pool configuration.
-
-**7c. Frontend wiring**
-- `App.tsx`: fetch per mode — `GET {VITE_API_BASE_URL}/api/questions/${mode}` — and remove the `mode === 'easy'` special-casing; keep the fallback to the local hardcoded arrays **only** for the offline case (document why).
-- Replace the obsolete SQL schema comment block with a pointer to `db/migrations/`, or delete it entirely (recommended: delete — the migrations are the single source of truth now).
-- Delete empty `src/db.ts` **unless Phase 6 decides it becomes a typed API client** (if so, implement the client there — never leave it empty).
-- Add `VITE_API_BASE_URL` to `.env.example` and read it in `App.tsx` via `import.meta.env` (with `http://localhost:3001` fallback for dev).
-
-**7d. Documentation cleanup**
-- Rewrite `README.md`: real project name, what it is (Spanish quiz game, safety/F1), local run steps, the two-arc design overview. Keep the AI Studio template lines only if the app is also deployed there — otherwise strip them.
-- Fix `metadata.json` description to match the quiz game (not "racing telemetry dashboard").
-- Verify `.env.example` lists `DATABASE_URL` and `VITE_API_BASE_URL` with comments.
-
----
-
-## Phase 8 — Verify *(sdd-verify)*
-
-Delegate to a review sub-agent, separate from the writers. Produce a verify report with evidence:
-
-- [ ] `GET /api/questions/easy` and `GET /api/questions/hard` both return unified `{ question, options[], answer, photoString }` arrays from Neon (curl against a running server).
-- [ ] Hard mode in-game answers draw from the DB — proof: temporarily break `db_hard` locally or inspect network tab; the game must not use `db_hard`.
-- [ ] Migrations apply cleanly to a **fresh** Neon database and are idempotent (apply twice, no error/no duplicates).
-- [ ] No hardcoded `localhost:3001` or bare `http://` base URL remains in `src/` (grep audit).
-- [ ] `tsc --noEmit` clean; `npm run lint` passes; no new `any`.
-- [ ] `README.md` + `metadata.json` describe the real project (inspect, not just token presence).
-- [ ] Stale artifacts removed: `src/db.ts` gone or repurposed; obsolete SQL comment gone.
-- [ ] No N+1 or runaway row growth — answer count per question is exactly the option count.
-- [ ] Optional-but-nice: `prefers-reduced-motion` and arcade visuals unaffected (regression check on the Arc A touches).
-
-Review provides evidence, not authorization — same policy as Arc A.
-
----
-
-## Phase 9 — Rollout
-
-- Squash or keep commits in logical units (migrations / backend / frontend / docs) — use `git log --oneline` on feature branch before merging to `main`.
-- Run `git status` + diff review before opening the PR; `main` has not received Arc A yet (`origin/HEAD -> main`, current branch `new_designs`) — decide whether Arc A merges first, then Arc B, or both together, and say why in the PR description.
-- No destructive migrations: all changes additive/safe; git revert of the feature branch remains the rollback plan.
-
----
-
-## Deliverables checklist (extended — Arc B items marked ⬛)
-
-- [x] `EXPLORE-NOTES.md` (or Engram entry) from Phase 1 — Engram `sdd/arcade-retrofit/explore`
-- [x] `DESIGN.md` — pixelated-retro delta design with contrast table, seam-fix section (:145), rollback note (:210)
-- [x] `ArcadeBackground` component + loop logic — sky/ground/dash layers, 3840px two-tile dash seam, reduced-motion support
-- [x] `CarSprite` component + animation logic — carColor tier switch, hard-corner SVG, reduced-motion support
-- [x] Palette rollout across existing components — `@theme` tokens, zero-radius tokens, `App.tsx` switched off hardcoded hex
-- [x] Verify report — PASS WITH WARNINGS 10/10, Engram `sdd/arcade-retrofit/verify-report`
-- [x] Bounded review + correction — review-78ec872d71631526 approved, R3-1 flex fix applied, pre-commit gate allow
-- [ ] `EXPLORE-NOTES.md` (or Engram entry) from Phase 1
-- [ ] `DESIGN.md`
-- [ ] `ArcadeBackground` component + loop logic
-- [ ] `CarSprite` component + animation logic
-- [ ] Palette rollout across existing components
-- [ ] Verify report (Arc A)
-- ⬛ `EXPLORE-NOTES.md` refreshed with live Neon DDL + endpoint inventory (Phase 5)
-- ⬛ Migration files in `db/migrations/` — easy schema, hard schema, hard seed (idempotent)
-- ⬛ `GET /api/questions/:mode` endpoint serving easy + hard from Neon
-- ⬛ Hard mode wired to DB (no `db_hard` usage in game path)
-- ⬛ `VITE_API_BASE_URL` env-driven fetch, no hardcoded base URL in `src/`
-- ⬛ `App.tsx` stale SQL comment removed or pointed at migrations
-- ⬛ `src/db.ts` deleted or repurposed (never empty)
-- ⬛ `README.md` + `metadata.json` describe the real quiz project
-- ⬛ Verify report (Arc B) — both modes, idempotency, offline fallback still works
-
----
-
-Adjust component names, file paths, and the exact palette to the real project once Phase 1 exploration is done — the values above are the defaults a sub-agent should propose, not hardcode.
+1. `sdd-propose` → `proposal.md` in a new `openspec/changes/{name}/` folder.
+2. `sdd-spec` → `specs/{domain}/spec.md` delta using `## ADDED/MODIFIED/REMOVED Requirements`, RFC 2119 keywords, Given/When/Then scenarios. A requirement no test can check must say so and name its verification method.
+3. `sdd-design` → `design.md`. Decisions with options and tradeoffs, one recommended choice each. For any CSS `translateX` loop, state the periodicity constraint explicitly.
+4. `sdd-tasks` → `tasks.md`, grouped by deliverable, each completable in one session.
+5. `sdd-apply` → edit the files, tick tasks in `tasks.md`.
+6. `sdd-verify` → `verify-report.md` with real command output. Evidence, not authorization — normal repo policy still governs whether work ships.
+7. `sdd-archive` → move the folder to `archive/YYYY-MM-DD-{name}/` and merge deltas into `openspec/specs/`. Never edit or delete an archived folder.

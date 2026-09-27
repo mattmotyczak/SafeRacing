@@ -1,0 +1,25 @@
+name: fresh-db-bootstrap
+domain: data-layer
+status: archived
+archived: 2026-09-26
+branch: new_designs
+summary: >-
+  Added the missing easy_* CREATE TABLE statements so a fresh database is
+  bootstrappable from the repo alone, and pinned seeded answer order with an
+  explicit ordinal so the option order a fresh database serves matches the
+  offline fallback. Verified 22/22 against a transactional throwaway-schema
+  probe, three consecutive runs.
+artifacts:
+  proposal: proposal.md
+  spec_delta: specs/data-layer/spec.md
+  design: design.md
+  tasks: tasks.md
+  verify_report: verify-report.md
+verified_by:
+  - read-only live introspection via information_schema
+  - transactional throwaway-schema probe (BEGIN / CREATE SCHEMA / ROLLBACK)
+  - literal-for-literal diff of seed text against git HEAD
+  - live endpoint check for both modes and one invalid mode
+findings_not_fixed:
+  - GAP-6 live easy_* tables contain Test / Second Test smoke-test rows
+  - GAP-7 reusable data-layer verification script needs a count-free design

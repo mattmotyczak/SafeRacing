@@ -1,0 +1,39 @@
+change: arcade-retrofit
+terminal_state: archived
+schema: spec-driven
+artifact_store: openspec
+project: saferacing
+opened: 2026-08-31
+implemented: 2026-09-01
+verified: 2026-09-01
+archived: 2026-09-01
+phases:
+  explore: done
+  design: done
+  tasks: done
+  apply: done
+  verify: done
+  review: done
+  archive: done
+artifacts:
+  exploration: exploration.md
+  proposal: null        # never produced — explore -> design path was taken
+  specs: null           # never produced — no delta spec artifact
+  design: null          # full design lives in repo DESIGN.md (see archive-report.md)
+  tasks: null           # reconstructed in archive-report.md
+  verify_report: verify-report.md
+  archive_report: archive-report.md
+review:
+  id: review-78ec872d71631526
+  lenses: 4
+  terminal_state: approved
+  resolved_finding_ids: [R3-1]
+  precommit_gate: allow
+migrated_from:
+  store: engram
+  observations: [39, 42, 43, 44, 45, 46, 47, 51, 52]
+  migrated_on: 2026-09-26
+  note: >-
+    Original run used artifact_store=engram. Every artifact above was recovered from
+    Engram observations and written to the repo on 2026-09-26, when the project
+    switched to artifact_store=openspec. Observation IDs are retained for traceability.

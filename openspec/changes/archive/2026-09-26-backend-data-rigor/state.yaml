@@ -1,0 +1,57 @@
+change: backend-data-rigor
+terminal_state: archived
+schema: spec-driven
+artifact_store: openspec
+project: saferacing
+opened: 2026-09-01
+implemented: 2026-09-01
+verified: null          # <-- NEVER VERIFIED. See archive-report.md "Verification debt".
+reviewed: null
+archived: 2026-09-26
+commit: de74dbe         # "Add migrations, DB runner, unified API & docs"
+phases:
+  explore: informal     # findings live in ORCHESTRATOR.md "Known gaps" list, not a separate artifact
+  design: done          # decision table in ORCHESTRATOR.md Phase 6
+  tasks: done           # implied by the commit; no tasks.md artifact was ever produced
+  apply: done
+  verify: NOT DONE
+  review: NOT DONE
+  archive: done         # archived 2026-09-26 on migration to the openspec store
+artifacts:
+  proposal: null
+  specs: openspec/specs/data-layer/spec.md
+  design: null          # decision table retained in ORCHESTRATOR.md Phase 6
+  tasks: null
+  verify_report: null   # <-- the gap this archive exists to make visible
+  archive_report: archive-report.md
+open_gaps:
+  - id: GAP-1
+    severity: high
+    summary: >-
+      db/migrations/0001_bootstrap.sql seeds easy_questions / easy_answers but never
+      creates them, so migrations cannot bootstrap a fresh database.
+  - id: GAP-2
+    severity: medium
+    summary: >-
+      No verify phase ever ran. No live-server curl, no double-apply idempotency test,
+      no fresh-database test. Claims in ORCHESTRATOR.md Phase 8 are unchecked.
+  - id: GAP-3
+    severity: medium
+    summary: >-
+      neondb_guide.txt still documents the wrong schema (single `questions` table,
+      quoted CamelCase identifiers, a nonexistent `idAnswer` column) and now
+      contradicts the migration and server.js.
+  - id: GAP-4
+    severity: low
+    summary: >-
+      Answer index is derived from answer primary-key order at query time rather than
+      stored, so option order is not guaranteed stable if rows are renumbered.
+migrated_from:
+  store: none
+  observations: []
+  migrated_on: 2026-09-26
+  note: >-
+    This change was implemented OUTSIDE the SDD pipeline — as a single commit with no
+    explore/design/tasks/verify artifacts in Engram or on disk. This archive was
+    reconstructed on 2026-09-26 by reading the commit diff and the resulting code.
+    It is a retrospective record, not an original artifact.

@@ -1,0 +1,33 @@
+change: arcade-scene-backdrop
+terminal_state: proposed
+schema: spec-driven
+artifact_store: openspec
+project: saferacing
+opened: 2026-09-01
+implemented: null
+phases:
+  explore: done
+  propose: done
+  spec: pending
+  design: pending
+  tasks: pending
+  apply: pending
+  verify: pending
+  review: pending
+  archive: pending
+artifacts:
+  exploration: exploration.md
+  proposal: proposal.md
+  design: null
+  tasks: null
+depends_on: []
+blocks: []
+recovered_from:
+  store: engram
+  observations: [54]
+  recovered_on: 2026-09-26
+  note: >-
+    This plan was confirmed with the user in plan mode on 2026-09-01 and then never
+    implemented. It existed only as Engram observation #54 and in no repo file. It was
+    written to the repo on 2026-09-26 when the project switched to artifact_store=openspec.
+    Nothing has been implemented; this folder is a proposal awaiting a spec.
