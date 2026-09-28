@@ -1,124 +1,81 @@
-/* ==============================================================
-   1. SERVER.JS UPDATES (HANDLING RELATIONS)
-   ============================================================== */
-// Since your data is split across two tables (easy_questions and easy_answers),
-// a single question actually has 4 rows of answers. We will use a SQL JOIN to 
-// fetch them all at once, and then group them together in Javascript so 
-// React gets the clean { question, options, answer, photoString } format.
+================================================================
+ neondb_guide.txt  —  TOMBSTONE. DO NOT USE AS SCHEMA DOC.
+================================================================
 
-// Add this endpoint to your server.js
-app.get('/api/questions/easy', async (req, res) => {
-  try {
-    // We JOIN the questions and answers tables on the relatedToQuestion foreign key
-    const query = `
-      SELECT 
-        q."idEasyQuestion", q.question, q."photoString",
-        a."idAnswer", a.answer, a."isCorrect"
-      FROM easy_questions q
-      JOIN easy_answers a ON q."idEasyQuestion" = a."relatedToQuestion"
-    `;
-    const result = await pool.query(query);
-
-    // Because of the JOIN, the database returns 4 rows for every 1 question.
-    // We use an object map to group those 4 rows back into a single question object.
-    const questionsMap = {};
-
-    result.rows.forEach(row => {
-      const qId = row.idEasyQuestion;
-      
-      // If we haven't seen this question yet in our loop, create its base structure
-      if (!questionsMap[qId]) {
-        questionsMap[qId] = {
-          question: row.question,
-          photoString: row.photoString, // Adding the base64 photo!
-          options: [],
-          answer: -1 
-        };
-      }
-
-      const currentQ = questionsMap[qId];
-      
-      // The index this answer will have in the options array (0, 1, 2, or 3)
-      const optionIndex = currentQ.options.length; 
-      
-      // Push the answer text into the options array
-      currentQ.options.push(row.answer);
-      
-      // If this specific answer row is marked as correct in the DB, 
-      // we record its index so React knows which option is the winner
-      if (row.isCorrect) {
-        currentQ.answer = optionIndex;
-      }
-    });
-
-    // Object.values converts our map back into a simple array of question objects
-    const formattedQuestions = Object.values(questionsMap);
-
-    // Send the data to React!
-    res.json(formattedQuestions);
-  } catch (err) {
-    console.error('Database error:', err);
-    res.status(500).json({ error: 'Failed to fetch questions' });
-  }
-});
+Replaced 2026-09-28. The 124 lines of sample code this file used to
+hold were WRONG, and they were wrong in a way that could silently
+break the data layer. The mistake is recorded below so it is not
+re-invented; the content is not.
 
 
-/* ==============================================================
-   2. APP.TSX UPDATES (INTERFACE & FETCHING)
-   ============================================================== */
+WHAT IT CLAIMED
+---------------
+A single `questions` table with options stored inline, queried with
+quoted CamelCase identifiers:
 
-// A. First, update your Question interface (around line 13) to include the photo:
-// interface Question {
-//   question: string;
-//   options: string[];
-//   answer: number;
-//   photoString?: string | null; // <-- ADD THIS
-// }
+    q."idEasyQuestion"   q."photoString"
+    a."idAnswer"         a."relatedToQuestion"
 
-// B. Next, add state and the useEffect to fetch the data when the app loads (around line 67):
-// const [dbEasy, setDbEasy] = useState<Question[]>([]);
-// // (You would do the same for dbHard if you have a hard_questions table)
-//
-// useEffect(() => {
-//   async function fetchQuestions() {
-//     try {
-//       // Note we are calling the new endpoint for easy questions
-//       const res = await fetch('http://localhost:3001/api/questions/easy');
-//       const data = await res.json();
-//       setDbEasy(data);
-//     } catch (err) {
-//       console.error("Error fetching easy questions:", err);
-//     }
-//   }
-//   fetchQuestions();
-// }, []);
+  plus a fetch-and-group helper for an easy-only endpoint.
 
 
-/* ==============================================================
-   3. APP.TSX UPDATES (USING THE DATA & SHOWING THE PHOTO)
-   ============================================================== */
+WHY IT IS WRONG
+---------------
+The real schema is FOUR tables - a questions/answers pair per mode,
+related 1:N - created by db/migrations/0001_bootstrap.sql:
 
-// A. Update your getNewQuestion function (around line 68):
-// const getNewQuestion = useCallback(() => {
-//   // If you have dbHard, you'd toggle between them here based on `mode`
-//   const db = dbEasy;
-//   
-//   if (db.length === 0) return; // DB is still loading
-//
-//   const randomIndex = Math.floor(Math.random() * db.length);
-//   setCurrentQuestion(db[randomIndex]);
-// }, [dbEasy]); 
+    easy_questions  ideasyquestion  question  photostring
+    easy_answers    ideasyanswer    answer    iscorrect
+                                    relatedtoquestion
+    hard_questions  idhardquestion  question  photostring
+    hard_answers    idhardanswer    answer    iscorrect
+                                    relatedtoquestion
 
-// B. Display the photo in your render!
-// Down in the JSX where you render the currentQuestion (around line 340+), 
-// you can render the base64 image if it exists:
+Concretely, the old guide was wrong on all three counts:
 
-// {currentQuestion.photoString && (
-//   <div className="flex justify-center mb-6">
-//     <img 
-//       src={`data:image/jpeg;base64,${currentQuestion.photoString}`} 
-//       alt="Question reference" 
-//       className="max-h-48 rounded-xl border border-white/10 shadow-lg"
-//     />
-//   </div>
-// )}
+  1. One table with inline options, not a 1:N questions/answers
+     pair. The old code's own comment admitted the split - "a single
+     question actually has 4 rows of answers" - and then ignored it.
+
+  2. An `idAnswer` column that does not exist. The real column is
+     `ideasyanswer` / `idhardanswer`.
+
+  3. Quoted CamelCase identifiers. Postgres folds UNQUOTED
+     identifiers to lowercase, and every real column in this
+     database is lowercase. Writing them quoted and mixed-case asks
+     for a column Postgres does not have.
+
+
+WAS IT EVER EXECUTED?
+--------------------
+No. Read-only introspection of information_schema on 2026-09-26
+confirmed all sixteen live columns are lowercase, with the types
+above and nextval defaults on both primary keys. The quoted
+CamelCase snippet was never run against this database, so it was
+stale documentation rather than a live hazard.
+
+For the record, had it been executed, the failure would have been
+quiet and nasty: quoted mixed-case identifiers would have created
+SECOND, incompatible tables, and every lowercase query in server.js
+would then fail against the originals.
+
+
+THE ACTUAL SCHEMA
+-----------------
+Read db/migrations/. That is the only schema documentation.
+
+The query contract lives in server.js: MODE_CONFIG (server.js:28-41)
+holds the only identifiers that ever reach SQL text, and
+groupQuestions() (server.js:46-72) reassembles the joined rows into
+{ question, options[], answer, photoString }.
+
+Requirement-level source of truth:
+  openspec/specs/data-layer/spec.md
+Design rationale:
+  openspec/design/backend-data-rigor.md
+
+
+This file is kept at its original path only because seven archived
+change folders reference it. Archived folders are never edited or
+deleted (openspec/config.yaml, rules.archive). Do not add content
+here.

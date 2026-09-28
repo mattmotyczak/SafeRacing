@@ -1,10 +1,30 @@
 # Spec — Game
 
 **Domain:** `game`
-**Source of truth:** behavior of `src/App.tsx`, `src/components/CarSprite.tsx`, `src/components/ArcadeBackground.tsx`, `src/index.css` as of commit `1e616d0` (branch `new_designs`).
+**Source of truth:** behavior of `src/App.tsx`, `src/components/CarSprite.tsx`, `src/components/ArcadeBackground.tsx`, `src/index.css` as of commit `e26fcf1` (branch `new_designs`).
 **Verification model:** there is no test runner in this repo. Every requirement below names how it is actually checked: `tsc`, grep audit, code read, or geometry math.
 
 ## ADDED Requirements
+
+### Requirement: The game is a driving-safety quiz for high-school students
+
+SafeRacing SHALL be a Spanish-language quiz game about **road-safety and driving knowledge**, aimed at high-school students.
+
+**"SafeRacing" is a product name, not a description of the content.** The game teaches driving, not Formula 1. Requirements, design docs, and player-facing copy MUST NOT imply Grand Prix, Formula 1, or professional racing content.
+
+> **Why this requirement exists.** Until 2026-09-28 five files described the project as "a final university project by Team Foxtrot" and a "racing quiz". That was wrong on both counts, and the wrong framing had already hardened into a normative decision — the offline fallback was justified in the data-layer spec as "a deliberate product decision for a university demo". Purpose is now a requirement so it cannot silently rot back.
+
+#### Scenario: Copy describes driving, not racing
+- **Given** any player-facing string, spec, or design document
+- **When** it characterises the game's subject matter
+- **Then** it refers to driving and road safety, never to Formula 1 or Grand Prix racing
+
+**Verify:** two greps, both enumerated under `rules.verify.audits` in `openspec/config.yaml`.
+
+1. **Docs** — grep `universit|universidad|Equipo Foxtrot|Proyecto Final|Team Foxtrot|Formula 1|Grand Prix` across all `*.md / *.tsx / *.ts / *.css / *.js / *.sql / *.yaml` (exclude `node_modules`). Hits allowed only in the correction-note allowlist there. Any hit that *asserts* the old framing fails.
+2. **Code** — the same pattern over `src/`, `server.js`, `db/` must return **0**. The Spanish alternatives are not optional: the in-game footer at `src/App.tsx:472,474` currently renders `Equipo Foxtrot` and `Proyecto Final` to players, so this check **fails today**. See open gap 8 in `openspec/status.md`.
+
+Note: neither grep catches the F1-themed seed data (Spanish question text says `F1`) — see open gap 7.
 
 ### Requirement: Single-page four-state game machine
 
@@ -163,7 +183,11 @@ When `prefers-reduced-motion: reduce` is set, the game MUST disable: all three b
 
 All colors in `src/**/*.tsx` MUST come from a Tailwind v4 `@theme` token or a `var(--color-*)` reference.
 
-**Sole permitted exception:** the traffic-light utilities — `bg-red-500`, `bg-yellow-500`, `bg-green-500` and their `/opacity` variants — plus the three stoplight glow shadows `shadow-[0_0_15px_rgba(...)]` at `src/App.tsx:226-228`. These are semantically distinct from the arcade accent palette and were reviewed and accepted (traffic-light exception, `DESIGN.md`).
+**Sole permitted exception:** the traffic-light utilities — `bg-red-500`, `bg-yellow-500`, `bg-green-500` and their `/opacity` variants — plus the three stoplight glow shadows `shadow-[0_0_15px_rgba(...)]` at `src/App.tsx:226-228`.
+
+**Authority for the utilities.** This is a recorded architecture decision, not a code-review outcome. `openspec/design/arcade-retrofit.md` selected palette strategy **(B) "Tokens + traffic-light exception"** on the stated grounds that the traffic-light colors are semantically distinct from the arcade accent palette and intentional rather than brand, and restates the three utilities as raw Tailwind in its token table. That decision's recorded scope is the three `bg-*-500` utilities and their `/opacity` variants.
+
+**The three glow shadows were never in scope of that decision.** The design record does not mention a 15px glow anywhere, and its glow/blur section states the opposite — *"Glow box-shadows become hard offset shadows"* (`openspec/design/arcade-retrofit.md:24`). The shadows are permitted only because this requirement inherits the exception from the utility decision rather than from any review of the glows themselves; no such review is on record. An earlier revision of this requirement asserted that one had occurred. That claim was false and is withdrawn. The three `App.tsx:226-228` references stand unchanged — what is unverified is their approval, not their existence.
 
 **Verify:** `Select-String -Pattern '#[0-9a-fA-F]{3,8}\b|rgba?\(' src\*.tsx src\**\*.tsx` — currently returns exactly the three stoplight shadow lines.
 
@@ -179,4 +203,4 @@ The `blur-[150px]` ambient orbs, the `blur(12px)` car aura, `.glass-panel` with 
 
 All `--radius-*` tokens are zeroed, so every `rounded-*` utility resolves to 0. The former `rounded-full` sites (stoplight lights, lives pips, trophy ring) are explicitly `rounded-none`.
 
-**Known deviation:** `CarSprite` SVG `<rect>` primitives still carry `rx` attributes (`CarSprite.tsx:51,53,55,57,59,61,63,65`), which round the sprite's own body corners. This contradicts the hard-corner contract and is the standing R2-2 follow-up.
+**Known deviation:** `CarSprite` SVG `<rect>` primitives still carry `rx` attributes (`CarSprite.tsx:51,53,55,57,59,61,63,64`), which round the sprite's own body corners. This contradicts the hard-corner contract and is the standing R2-2 follow-up.

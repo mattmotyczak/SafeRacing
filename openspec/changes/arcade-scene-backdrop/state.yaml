@@ -1,5 +1,5 @@
 change: arcade-scene-backdrop
-terminal_state: proposed
+terminal_state: specced
 schema: spec-driven
 artifact_store: openspec
 project: saferacing
@@ -8,7 +8,7 @@ implemented: null
 phases:
   explore: done
   propose: done
-  spec: pending
+  spec: done
   design: pending
   tasks: pending
   apply: pending
@@ -18,10 +18,124 @@ phases:
 artifacts:
   exploration: exploration.md
   proposal: proposal.md
+  spec: specs/game/spec.md
   design: null
   tasks: null
 depends_on: []
 blocks: []
+closes_gaps: [R2-1, R2-2, R2-3, R3-2-partial, R4-1, AURA-MOTION-REDUCE, ANIMATE-PRESENCE-REDUCE]
+spec_revision:
+  date: 2026-09-28
+  by: sdd-spec
+  trigger: >-
+    Two passes. (1) A 12-question design interview: the first delta predated it and asserted
+    several claims the interview settled differently or that proved false. (2) An adversarial
+    re-verification of the post-interview revision, which found a DEPTH-ORDER INVERSION in the
+    parallax table and three further defects. The affected requirements were rewritten, not
+    patched around.
+  reversed:
+    - "Out-of-game dimmed backdrop — rejected; background stays gated behind status === 'playing'"
+    - "Question heading in Press Start 2P — reversed; body prose in Manrope"
+    - "Answer feedback glyph — rejected; border + hard offset, no glyph"
+    - "Car rx removal — corrected to the 4-unit grid (rx=0 or rx=4), not deleted"
+    - "w-1/2 tile justification — withdrawn as mathematically false"
+    - "Sky duration 25s -> 120s — the post-interview table had the sky at 76.8 px/s BEHIND hills at 32 px/s, a 2.4x depth-order inversion. The sky is now 16 px/s, exactly half the hills."
+    - "Ladder is a FIFTH rung, not a fourth — two rungs added (60s hills, 120s sky), not one"
+    - "Tree count per tile 4 -> 8 — 1920/240 = 8 periods fit; the old verify (840+120=960<1920) proved dead space, not off-seam clearance"
+    - "Hills off-seam claim — positions kept, but a 380px max width was ADDED; without it the off-seam claim was unfalsifiable"
+  live_bugs_found:
+    - "ground layer: period 40px on w-1/2 tiles, 1100 mod 40 = 20 -> half-spacing compression. SEVERITY CORRECTED: isMoving runs 3s (App.tsx:111-122), so the A/B boundary advances only 0.3 of a cycle (330px) and then PARKS at screen x=770px for the whole question period (panel gated on !isMoving at App.tsx:364). A static mid-panel artefact, not a transient 10s sweep."
+    - "sky layer: period 100px, 1920 mod 100 = 20 -> the period itself must change to 128px; a geometry-only fix is impossible"
+  atomic_coupling:
+    finding: >-
+      The 128px sky period is valid ONLY on fixed 1920px tiles. 1920 mod 128 = 0, but on a
+      w-1/2 tile at the project's own max-w-[1100px] panel width, 1100 mod 128 = 76 — a WORSE
+      phase error than the 100px period produced, and not fixable by geometry alone. The period
+      change and the w-1/2 -> w-[1920px] tile migration are therefore ONE atomic change. Landing
+      one without the other leaves the sky broken.
+    status: recorded in the delta spec (Background scroll layers, and Every layer's tile width is congruent to 0 modulo its own period)
+  census_note: >-
+    A grep for `arcade-scroll` returns FOUR classes, not three: sky, ground, dashes, and
+    .arcade-scroll-running (index.css:122-124, applied at ArcadeBackground.tsx:28). The fourth
+    is a play-state toggle, not a parallax layer, and MUST NOT be added to the
+    prefers-reduced-motion block. Verify-phase greps must expect four; a count of three is a
+    stale-grep signal, not a pass.
+  new_requirements: 18
+  modified_requirements: 6
+  removed_requirements: 0
+  scenarios: 26
+  verification_model: >-
+    No test runner, no browser tooling, no test dependency. npm run lint (tsc --noEmit) is the
+    only automated gate. Everything else is grep audit, code read, or computed geometry, plus
+    human visual sign-off with the app open. R3-2 (automated seam regression test) remains open
+    and cannot be closed from this project.
+scope_extended:
+  date: 2026-09-28
+  by: user
+  from: background only
+  to: background, car sprite, stoplight, question/answer bubble
+  note: >-
+    The original proposal excluded the car sprite by name. The user extended the change
+    into a general UI/UX revision across all four surfaces. Writing the spec surfaced
+    three live contract violations that no existing check covers — the stoplight's 15px
+    soft glow shadows (App.tsx:226-228), shadow-lg on the question photo (App.tsx:380),
+    and the un-gated AnimatePresence entrance transitions. All three are folded into
+    scope because each sits inside a surface this pass already rewrites.
+design_debt:
+  - id: parallax-rung-60s
+    rule: AGENTS.md hard rule 5
+    owed_by: design
+    note: >-
+      The 25s / 10s / 2s parallax rungs are all consumed, so a rung at 60s was added for the
+      hills. This is a new duration on an existing ladder and pushes against a project posture,
+      so it MUST be recorded in openspec/changes/arcade-scene-backdrop/design.md with the
+      options considered and rejected.
+  - id: parallax-rung-120s-sky
+    rule: AGENTS.md hard rule 5
+    owed_by: design
+    note: >-
+      The sky is slowed 4.8x from its shipped 25s to 120s, which puts it at 16 px/s — exactly
+      half the hills. This is a SECOND deliberate tradeoff, discovered by the adversarial
+      re-verification, and owes its own design.md entry naming the option considered and
+      rejected. A shared 60s rung was rejected because it puts sky and hills at identical speed
+      with one behind the other (fused plane, zero relative motion); a 100px-period sky was
+      rejected as a motion-salient repetitive grating. sdd-spec deliberately did NOT create
+      design.md — the design phase owns that file.
+tracked_gaps:
+  note: >-
+    Drift found by the 2026-09-28 adversarial re-verification, recorded rather than erased. These
+    are deliberately NOT listed in closes_gaps: a gap belongs there only when this change
+    actually closes it, and "correcting a false claim in a design record" is not a product gap.
+  items:
+    - id: retrofit-doc-rgba-count
+      file: openspec/design/arcade-retrofit.md
+      found: 2026-09-28
+      claim: "6 App.tsx rgba shadow/vignette sites to tokenize"
+      actual: "the rgba/# audit over src/**/*.tsx returns 3 lines, all App.tsx:226-228, and all three are the stoplight glows"
+      status: fixed-in-this-pass
+      species: same-as-the-false-provenance-claim — an unverified count in a design record presented as measured
+    - id: retrofit-doc-glow-scope
+      file: openspec/design/arcade-retrofit.md
+      claim: "the traffic-light colour exception is listed under 'Stays' without distinguishing the three sanctioned bg-*-500 utilities from the three 15px glow shadows"
+      actual: "the utilities ARE sanctioned (AGENTS.md hard rule 1); the glow shadows were never in scope, and the same document's Changes list says 'Glow box-shadows become hard offset shadows'"
+      status: fixed-in-this-pass
+      species: two unrelated claims sharing one row
+    - id: retrofit-doc-audit-tolerance
+      file: openspec/design/arcade-retrofit.md
+      claim: "the blur/rounded audit tolerates 'documented stoplight/traffic exceptions'"
+      actual: "the glows are documented as an exception nowhere; the only authority that named them was base-spec text carrying false provenance"
+      status: fixed-in-this-pass
+      species: tolerance language with no backing authority
+    - id: proposal-and-exploration-layer-tables
+      file: openspec/changes/arcade-scene-backdrop/{proposal.md,exploration.md}
+      claim: "each carries a full layer table with periods and durations"
+      actual: "a third table set (hills 240px/18s, mid 480px/10s, sky 1920px/25s), contradicting the delta's canonical table"
+      status: left-in-place-by-instruction
+      note: >-
+        Not edited this pass — out of scope by instruction. The delta's header states that its
+        own table is the single source of truth and that those two tables are superseded and
+        MUST NOT be implemented. Still dirty for the design phase to reconcile.
+next_phase: design
 recovered_from:
   store: engram
   observations: [54]
@@ -30,4 +144,7 @@ recovered_from:
     This plan was confirmed with the user in plan mode on 2026-09-01 and then never
     implemented. It existed only as Engram observation #54 and in no repo file. It was
     written to the repo on 2026-09-26 when the project switched to artifact_store=openspec.
-    Nothing has been implemented; this folder is a proposal awaiting a spec.
+    Scope was extended and a spec delta written on 2026-09-28. The delta was then rewritten
+    the same day against a 12-question design interview, and corrected a second time the same
+    day after adversarial re-verification refuted its parallax table. Still nothing
+    implemented.

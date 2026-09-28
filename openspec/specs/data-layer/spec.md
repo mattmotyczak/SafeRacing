@@ -1,7 +1,7 @@
 # Spec — Data Layer
 
 **Domain:** `data-layer`
-**Source of truth:** `server.js`, `db/apply.js`, `db/migrations/0001_bootstrap.sql`, the data-fetch half of `src/App.tsx`, as of commit `1e616d0` (branch `new_designs`).
+**Source of truth:** `server.js`, `db/apply.js`, `db/migrations/0001_bootstrap.sql`, the data-fetch half of `src/App.tsx`, as of commit `e26fcf1` (branch `new_designs`).
 **Verification model:** no test runner. Requirements name their check: `tsc`, grep audit, SQL read, or a documented manual/`curl` check.
 
 ## ADDED Requirements
@@ -10,16 +10,27 @@
 
 The database SHALL hold one questions/answers table pair per mode, with a 1:N relation from answers to questions. All four tables SHALL be created by `db/migrations/`, so a fresh database is bootstrappable from the repo alone.
 
-| Table | Columns |
-|-------|---------|
-| `easy_questions` | `ideasyquestion` (PK, `SERIAL`), `question VARCHAR(255) NOT NULL`, `photostring TEXT` |
-| `easy_answers` | `ideasyanswer` (PK, `SERIAL`), `answer VARCHAR(255) NOT NULL`, `iscorrect BOOLEAN NOT NULL`, `relatedtoquestion INTEGER NOT NULL` → `easy_questions(ideasyquestion)` |
-| `hard_questions` | `idhardquestion` (PK, `SERIAL`), `question VARCHAR(255) NOT NULL`, `photostring TEXT` |
-| `hard_answers` | `idhardanswer` (PK, `SERIAL`), `answer VARCHAR(255) NOT NULL`, `iscorrect BOOLEAN NOT NULL`, `relatedtoquestion INTEGER NOT NULL` → `hard_questions(idhardquestion)` |
+**"Four tables" is a claim about the game, not a claim about the database.** All four live in the **`public`** schema, and `public` contains nothing else this project owns.
+
+| Schema | Tables | Owner |
+|--------|--------|-------|
+| `public` | `easy_questions`, `easy_answers`, `hard_questions`, `hard_answers` | this project — the entire game |
+| `neon_auth` | `account`, `invitation`, `jwks`, `member`, `organization`, `project_config`, `session`, `user`, `verification` | **Neon Auth — not this project** |
+
+The same Neon database hosts `neon_auth` beside `public`. It is Neon's own authentication service — users, sessions, organisations, invitations, and JWT signing keys — and it is entirely unrelated to the game. No table in it is referenced by `server.js`, `db/apply.js`, or any migration. See the requirement *The game owns the `public` schema only* for what that forbids.
+
+| Table | Schema | Columns |
+|-------|--------|---------|
+| `easy_questions` | `public` | `ideasyquestion` (PK, `SERIAL`), `question VARCHAR(255) NOT NULL`, `photostring TEXT` |
+| `easy_answers` | `public` | `ideasyanswer` (PK, `SERIAL`), `answer VARCHAR(255) NOT NULL`, `iscorrect BOOLEAN NOT NULL`, `relatedtoquestion INTEGER NOT NULL` → `public.easy_questions(ideasyquestion)` |
+| `hard_questions` | `public` | `idhardquestion` (PK, `SERIAL`), `question VARCHAR(255) NOT NULL`, `photostring TEXT` |
+| `hard_answers` | `public` | `idhardanswer` (PK, `SERIAL`), `answer VARCHAR(255) NOT NULL`, `iscorrect BOOLEAN NOT NULL`, `relatedtoquestion INTEGER NOT NULL` → `public.hard_questions(idhardquestion)` |
 
 Identifiers MUST be written lowercase and unquoted. **Postgres folds unquoted identifiers to lowercase**, so a query written as `q.idHardQuestion` resolves to the same column as `q.idhardquestion` — but writing them lowercase everywhere is what keeps the SQL and the JS from disagreeing.
 
-**Verified against the live database.** All sixteen columns across the four tables are lowercase, with the types above and `nextval` defaults on both primary keys. `neondb_guide.txt` shows the quoted CamelCase form (`q."idEasyQuestion"`, `a."idAnswer"`, `a."relatedToQuestion"`) and an `idAnswer` column that does not exist — that snippet was never executed against this database, so it is a historical artifact rather than schema documentation. An earlier draft of this spec carried a live hazard warning on the possibility that the easy columns were mixed-case; read-only `information_schema` introspection disproved it.
+`VARCHAR(255)` on `question` and `answer` is a live constraint, not a formality: any new or rewritten question text MUST fit 255 characters or the insert fails at runtime rather than at review.
+
+**Verified against the live database.** All sixteen columns across the four tables are lowercase, with the types above and `nextval` defaults on both primary keys. The root `neondb_guide.txt` is now a **tombstone** — on 2026-09-28 its 124 lines of sample code were replaced with a short notice, because the snippet it carried showed the quoted CamelCase form (`q."idEasyQuestion"`, `a."idAnswer"`, `a."relatedToQuestion"`) and an `idAnswer` column that does not exist. That snippet was never executed against this database. The file is kept at its original path only because archived change folders reference it and archived folders are never edited. **Schema documentation is `db/migrations/`.** An earlier draft of this spec carried a live hazard warning on the possibility that the easy columns were mixed-case; read-only `information_schema` introspection disproved it.
 
 `photostring` holds a base64-encoded JPEG, rendered client-side as `data:image/jpeg;base64,<photostring>`.
 
@@ -33,7 +44,34 @@ Identifiers MUST be written lowercase and unquoted. **Postgres folds unquoted id
 - **When** `npm run db:apply` runs
 - **Then** the `CREATE TABLE IF NOT EXISTS` statements are no-ops and the guarded seeds insert no rows
 
-**Verify:** code read of `MODE_CONFIG` (`server.js:28-41`); `information_schema` introspection of all four tables against Neon. Both paths executed — see `openspec/changes/archive/2026-09-26-fresh-db-bootstrap/verify-report.md`.
+#### Scenario: The four game tables are the only game objects in `public`
+- **Given** the live database
+- **When** the relations in the `public` schema are listed
+- **Then** exactly four are returned — `easy_questions`, `easy_answers`, `hard_questions`, `hard_answers` — and the `neon_auth` schema is untouched by the apply
+
+**Verify:** code read of `MODE_CONFIG` (`server.js:28-41`); `information_schema` introspection of all four tables against Neon, plus a `public`-scoped relation listing. Both paths executed — see `openspec/changes/archive/2026-09-26-fresh-db-bootstrap/verify-report.md`.
+
+### Requirement: The game owns the `public` schema only
+
+The `neon_auth` schema in the same database is **not owned by this project and MUST NOT be read, written, altered, or dropped** by any code, migration, script, or manual operation recorded in this repo. It holds nine tables — `account`, `invitation`, `jwks`, `member`, `organization`, `project_config`, `session`, `user`, `verification` — belonging to Neon Auth, a service this game has no integration with.
+
+**`DROP SCHEMA public CASCADE` MUST NOT ever be run against this database.** It is not a reset; it destroys the game tables and simultaneously leaves Neon Auth without the database it was provisioned into. There is no requirement, task, or cleanup step in this repo that calls for it, and none may be added.
+
+Every statement in `db/migrations/` MUST act only on the four `public` tables. Because `db/apply.js` pins no `search_path` and sends each file through a single `pool.query(sql)`, isolation currently depends on the contents of the SQL rather than on an enforced schema boundary — a migration that targets `neon_auth` by mistake would succeed. Reviewing each migration's identifiers is therefore the control, and it is why this requirement exists as a prohibition rather than as a technical description.
+
+If the game ever needs objects outside `public` — a view, a second schema — they MUST be created with an explicit schema qualifier and added to the table above. Silently relying on `search_path` resolution is what makes this boundary fragile.
+
+#### Scenario: A data-layer change leaves `neon_auth` alone
+- **Given** the live database, with nine tables in `neon_auth`
+- **When** a migration under `db/migrations/` is applied
+- **Then** no statement targets `neon_auth`, the nine tables and their row counts are unchanged, and no schema is dropped
+
+#### Scenario: No migration drops a schema
+- **Given** every file under `db/migrations/`
+- **When** they are grepped for `DROP SCHEMA` and `DROP DATABASE`
+- **Then** there are zero matches
+
+**Verify:** grep audit — `DROP SCHEMA|DROP DATABASE` over `db/migrations/` returns zero matches; read-only `information_schema` / `pg_catalog` introspection of `neon_auth` before and after an apply, asserting the nine tables and their counts are unchanged. The `DROP` audit is greppable without a database; the isolation claim is NOT — it is an inspection of each migration's identifiers and must be re-checked whenever a migration is added.
 
 ### Requirement: Seeded option order is deterministic and matches the offline fallback
 
@@ -99,7 +137,7 @@ The frontend MUST read the API base from `import.meta.env.VITE_API_BASE_URL`, de
 
 ### Requirement: Offline fallback is a specified behavior, not a leftover
 
-If a mode's fetch rejects, or resolves to an empty or falsy array, the game MUST fall back to that mode's hardcoded 5-question bank (`db_easy` / `db_hard`) and log the reason. This is a deliberate product decision for a university demo that must run without a database, and it MUST be documented as such rather than treated as dead code.
+If a mode's fetch rejects, or resolves to an empty or falsy array, the game MUST fall back to that mode's hardcoded 5-question bank (`db_easy` / `db_hard`) and log the reason. This is a deliberate product decision — the game is used in a high-school setting where an unreachable database must not end the session — and it MUST be documented as such rather than treated as dead code.
 
 **Verify:** code read (`src/App.tsx:53-91`).
 
