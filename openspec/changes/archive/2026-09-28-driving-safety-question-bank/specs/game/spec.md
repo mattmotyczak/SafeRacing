@@ -23,8 +23,8 @@ For a given mode the game SHALL draw from the mode's fetched bank, and SHALL fal
 hardcoded local array when the fetched bank is empty or the fetch failed.
 
 ```
-easy → dbEasy.length > 0 ? dbEasy : questionsEasy
-hard → dbHard.length > 0 ? dbHard : questionsHard
+easy → dbEasy.length > 0 ? dbEasy : db_easy
+hard → dbHard.length > 0 ? dbHard : db_hard
 ```
 
 The fallback remains intentional and MUST be preserved: it is the only way the game is playable
@@ -32,8 +32,8 @@ with the backend down. See the `data-layer` spec for the fetch contract.
 
 **What changes:** the fallback banks move out of `src/App.tsx:23-38` into
 `src/data/questions.easy.ts` and `src/data/questions.hard.ts`, and their size changes from 5 + 5
-to 30 easy and approximately 80 hard. The selection logic above is unchanged; only the identifier
-the fallback is bound to changes.
+to 30 easy and 80 hard. The selection logic is unchanged; the module keeps the historical `db_easy` /
+`db_hard` names, so only where the bank lives changes.
 
 The rationale for moving them out is a collision, not aesthetics — see `design.md`. Roughly 110
 questions inline is about a thousand lines inside a component, and it puts a data migration in the
@@ -43,12 +43,11 @@ same file as concurrent visual work.
 
 - **Given** `GET /api/questions/hard` rejects
 - **When** the player starts Realista mode
-- **Then** the hardcoded `questionsHard` bank is used and the game is playable
+- **Then** the hardcoded `db_hard` bank is used and the game is playable
 
 **Verify:** code read of `getNewQuestion` and both fetch effects. The `file:line` references in the
 base spec (`src/App.tsx:53-91`, `:94-103`) shift when the inline banks are removed; the corrected
-line numbers land in the base spec when this delta is merged at archive, and are recorded in
-`verify-report.md` in the meantime.
+line numbers are recorded in `verify-report.md` §7 and are now in the merged base spec.
 
 ---
 
@@ -223,7 +222,7 @@ all untouched — this change adds no colour, no animation, no layer, and no JSX
   unchanged by it.
 - **Answer feedback.** Owned by `arcade-scene-backdrop`. It must key off the *resolved* `answer`
   index, which this change makes trustworthy in both sources; adding it here would collide.
-- **The in-game footer credit** at `src/App.tsx:472,474` — open gap 8, an authorship decision, not a
+- **The in-game footer credit** at `src/App.tsx:497,499` — open gap 8, an authorship decision, not a
   data one.
 - **The `lightState` timing choreography** in the `setTimeout` chains. Not one beat changes. The
   draw still happens at the `stopped` beat, with reshuffle applied at the moment of the draw.

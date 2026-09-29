@@ -39,7 +39,7 @@ Branch `new_designs`, HEAD `453b542` ("Migrate SDD to openspec; add question ban
 | B | Backend & Data-Layer Rigor — migrations, unified API, hard mode from DB | **Shipped; data layer now verified** — see below |
 | C | Cartoon daytime road scene + dimmed backdrop | **Proposed only — not started** |
 
-Active change, `driving-safety-question-bank`: **`apply` and `verify` are done; `review` and `archive` remain.** It closes gaps 1, 2, 7, 9 and 10, and leaves gap 8 open by design. Nothing from it is committed — `src/App.tsx` is modified and `db/migrations/0002_driving_safety_bank.sql` is untracked. Read `openspec/changes/driving-safety-question-bank/verify-report.md` before touching either; a parallel agent is live in the same repo and `arcade-scene-backdrop` is being edited right now.
+Active change, `driving-safety-question-bank`: **committed as `a59386c`; `review` and `archive` are complete.** It closes gaps 1, 2, 7, 9 and 10, and leaves gap 8 open by design. Six planned checks in the change's `verify-report.md` §6 were never run — there is no local Postgres, `psql` or Docker on this machine — and that gap is recorded, not closed. The change is archived at `openspec/changes/archive/2026-09-28-driving-safety-question-bank/`.
 
 Arc B's nine skipped Phase 8 checks have since been executed against the live database. Verified: both endpoints return the unified contract from a live database; migration idempotency under double-apply; a fresh-database bootstrap through a transactional throwaway-schema probe (22/22, three runs, zero residue). One check remains genuinely unverified — hard mode drawing from the DB rather than `db_hard` is confirmed only indirectly, by the returned option order matching the live scrambled primary keys rather than the authored order in `App.tsx`. The `fresh-db-bootstrap` change also fixed a second defect found along the way: seeded answer order was planner-dependent, so a freshly seeded database served a different option order than `db_easy`.
 
@@ -247,8 +247,8 @@ Bank size is no longer 5: 30 easy, 80 hard, from the files and from the live tab
 
 **The shipped rule is stronger than the one this gap and the change's `tasks.md` step 13 specify** —
 they ask only that the *previously drawn* question be excluded. The stronger rule (full depletion plus
-the seam guard) is what actually prevents repeats. `design.md` and the game delta spec still carry the
-weaker wording and **must be updated before archive**.
+the seam guard) is what actually prevents repeats, and it is now the specified rule: the game delta
+and `design.md` both carry the full depletion behaviour and the `lastId` seam guard.
 
 The original finding, kept for the record:
 
@@ -373,12 +373,12 @@ Arc A's design was never a separate artifact — it was written straight to the 
 
 ## Next change: `arcade-scene-backdrop`
 
-**Before starting it, `driving-safety-question-bank` should clear `review` and `archive`.** Its
-`apply` and `verify` are done and the evidence is in
-`openspec/changes/driving-safety-question-bank/verify-report.md`, but nothing is committed and six
-planned checks were never run (`verify-report.md` §6). `arcade-scene-backdrop` is now unblocked on one
-of its dependencies — it can assume the authored option order, because gaps 2 and 10 are closed — but
-stacking an uncommitted change under an unreviewed one is how fences get crossed.
+**`driving-safety-question-bank` is closed out** — committed as `a59386c`, reviewed and archived at
+`openspec/changes/archive/2026-09-28-driving-safety-question-bank/`, with its evidence in that
+folder's `verify-report.md`. Six planned checks there were never run (§6) and remain outstanding, so
+a second `npm run db:apply` is still the cheapest way to close the idempotency half.
+`arcade-scene-backdrop` is unblocked on one of its dependencies — it can assume the authored option
+order, because gaps 2 and 10 are closed.
 
 Read `openspec/changes/arcade-scene-backdrop/exploration.md` and `proposal.md`.
 

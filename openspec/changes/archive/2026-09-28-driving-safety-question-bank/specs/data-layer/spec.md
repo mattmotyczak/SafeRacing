@@ -222,7 +222,7 @@ changes.
 
 ## Out of scope
 
-- The in-game footer credit at `src/App.tsx:472,474` — **open gap 8**, an authorship/copy decision
+- The in-game footer credit at `src/App.tsx:497,499` — **open gap 8**, an authorship/copy decision
   the team has not made. Recorded as a non-goal in `proposal.md` and deliberately untouched here.
 - `arcade-scene-backdrop` in its entirety, including the answer-feedback work that also depends on
   the resolved `answer` index. That change reads this one; this change does not read it.

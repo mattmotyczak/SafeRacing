@@ -116,8 +116,9 @@ design_refinements:
     rule: >-
       tasks.md 13 and the game delta spec describe excluding only the PREVIOUSLY DRAWN question. What
       shipped is full draw-without-replacement until exhaustion plus the lastId seam guard. The weaker
-      rule is the one that produces the lap-seam repeat. design.md and the delta spec must be updated to
-      carry the stronger form before archive.
+      rule is the one that produces the lap-seam repeat. Obligation DISCHARGED 2026-09-28: design.md
+      section 9 and the game delta spec now both carry the stronger form, including the lastId seam
+      guard, the db.length > 1 guard, the soft fallback and the db.indexOf keying.
   - id: answer-remap-is-runtime-not-type
     rule: >-
       The remap is the load-bearing half of the shuffle: answer is recomputed as
@@ -165,12 +166,11 @@ method_notes:
   - >-
     The explicit BEGIN/COMMIT in 0002 means a failed run can only leave 0 rows or all 550. That argument
     needs no database access and refutes a partial-insert report on its own.
-next_phase: review
+next_phase: archive
 not_committed:
   note: >-
-    Nothing from this change is committed. src/App.tsx is modified and
-    db/migrations/0002_driving_safety_bank.sql is untracked. A parallel frontend agent is live in the
-    same repo; the fence in design.md section 7 must be re-checked before staging either file.
+    The change's own files are committed as a59386c, with the fence in design.md section 7 confirmed
+    against it. The one thing still deliberately uncommitted is recorded under manual below.
   manual:
     thing: references/MANUAL_Vehiculo_4Ruedas_2023 SA.pdf
     status: deliberately never committed

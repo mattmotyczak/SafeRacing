@@ -126,10 +126,10 @@ rules:
       #       this comment shifts the line numbers of the lines that name them.
       #
       #   (b) CODE CHECK — hits in src/, server.js, db/ must be ZERO. This is the one that
-      #       currently FAILS, at src/App.tsx:472,474 (the in-game footer). Line numbers are
+      #       currently FAILS, at src/App.tsx:497,499 (the in-game footer). Line numbers are
       #       cited here because a code hit is a violation, not an allowlisted note.
       - "framing docs check: hits only in the allowlisted files above, and only as correction notes"
-      - "framing code check: 0 hits in src/, server.js, db/ -- CURRENTLY FAILS, see openspec/status.md gap 8 (src/App.tsx:472,474)"
+      - "framing code check: 0 hits in src/, server.js, db/ -- CURRENTLY FAILS, see openspec/status.md gap 8 (src/App.tsx:497,499)"
   archive:
     - Warn before merging destructive deltas.
     - Move the change folder to openspec/changes/archive/YYYY-MM-DD-{change-name}/; never

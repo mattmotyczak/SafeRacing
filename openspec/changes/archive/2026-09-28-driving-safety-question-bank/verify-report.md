@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-28
 **Branch:** `new_designs`
-**Change state:** `apply` and `verify` complete. `review`, `archive` pending. **Not committed.**
+**Change state:** `apply` and `verify` complete. `review` and `archive` complete. Committed as `a59386c`.
 **Verdict:** the data layer is verified against live Neon and the code passes the type gate. Six planned
 checks were **not** performed and are listed as outstanding. Three claims in `tasks.md` were wrong and
 are corrected below rather than quietly satisfied.
@@ -190,6 +190,25 @@ skill-registry work, not to this change.
 Returning to the menu (`src/App.tsx:380,452`) reaches a new game only through `startGame`
 (`:365,372,445`), which clears both refs, so step 13's "and on return to the menu" is satisfied
 transitively rather than by a second call site.
+
+### Corrected `src/App.tsx` anchors
+
+The base game spec cited `src/App.tsx:53-91` for the two fetch effects and `:94-103` for the draw
+function. Removing the inline banks shifted both, and the delta deferred recording the corrected
+numbers rather than guessing them. They are here, read off the source after the removal:
+
+| What | Correct anchor at `a59386c` |
+|------|------------------------------|
+| Easy-fetcher `useEffect` | `src/App.tsx:48` (the `fetch` is at `:51`) |
+| Hard-fetcher `useEffect` | `src/App.tsx:68` (the `fetch` is at `:71`) |
+| `getNewQuestion` | `src/App.tsx:89` |
+| `startGame` (resets both refs) | `src/App.tsx:128` |
+| In-game footer credit — **gap 8** | `src/App.tsx:497,499` |
+
+The footer figure is the one that mattered most: the line pair cited across this change's artifacts
+before this report was written was correct for `e26fcf1` and `453b542` and is stale for anything
+later, and every one of those citations has been corrected in place. **A `file:line` in a spec is
+only correct for the commit it was written against** — re-read the anchor before reusing it.
 
 ---
 

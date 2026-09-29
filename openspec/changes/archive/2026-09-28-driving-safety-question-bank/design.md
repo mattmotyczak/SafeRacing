@@ -277,8 +277,15 @@ rather than because it was overlooked.
 > Read the note at the end of this section before relying on any of the reasoning here. The reasoning
 > about *not* using a shuffle bag, and about the 1-question edge case, still stands.
 
-`getNewQuestion` excludes the previously drawn question when the bank holds more than one entry,
-and falls back to the full bank when exclusion leaves nothing.
+`getNewQuestion` draws **without replacement** from the questions not yet served in the current lap,
+tracked in an `askedIds` ref. When the bank is exhausted the served set is reset and a new lap
+begins. Because that reset discards exactly the state the seam guard needs, the previously drawn
+question's identity is carried across it in a separate `lastId` ref and excluded from the fresh pool.
+Every exclusion is guarded on the bank holding more than one entry, and falls back to the full bank
+when exclusion leaves nothing.
+
+Exclusion keys on `db.indexOf(picked)` — the bank's own index, not a pool-relative one — because the
+pool is produced by `.filter()` and pool-relative indices shift as it shrinks.
 
 **Soft, because the alternative strands the player.** Returning no question leaves the state
 machine in `playing` with nothing on screen and `handleAnswer` inert — the only exit is the
@@ -323,8 +330,10 @@ prevent the bad case is its own bug class — here the reset was *correct* and s
 exclusion must key on `db.indexOf(picked)`, not a pool-relative index: the pool comes from
 `.filter()`, so pool-relative indices shift as it shrinks and the exclusion silently stops working.
 
-**The delta spec still describes the weaker rule** and must be updated before archive. See
-`verify-report.md` §7 and `tasks.md` §Corrections, item 3.
+**The delta spec no longer describes the weaker rule.** The game delta now specifies the full
+depletion behaviour, the `lastId` seam guard, the `db.length > 1` guard, the soft fallback and the
+`db.indexOf` keying, so `design.md`, the delta and the shipped code agree. See `verify-report.md` §7
+and `tasks.md` §Corrections, item 3.
 
 ---
 

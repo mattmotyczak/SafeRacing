@@ -122,7 +122,7 @@ is ticked, but there is no second call site.
 - [x] 23. Run the audits in `rules.verify.audits`: `npx tsc --noEmit` exits 0; the framing code
   check over `src/data/` and `db/migrations/0002` returns zero; `DROP SCHEMA|DROP DATABASE` over
   `db/migrations/` returns zero. **Record honestly that the full framing check still fails at
-  `src/App.tsx:472,474`** — that is open gap 8, an explicit non-goal, not a pass.
+  `src/App.tsx:497,499`** — that is open gap 8, an explicit non-goal, not a pass.
 - [x] 24. Confirm the visual counts are unchanged: no hex or `rgba()` outside the traffic-light
   exception, no `blur`, no `rounded-*` other than `rounded-none`. This change adds no colour, no
   animation, and no JSX, so every count must match today exactly.
@@ -135,33 +135,33 @@ is ticked, but there is no second call site.
 
 ## Phase: review
 
-- [ ] 27. Review the diff against `openspec/specs/` and the two deltas in `specs/`. Confirm every
+- [x] 27. Review the diff against `openspec/specs/` and the two deltas in `specs/`. Confirm every
   scenario has a verification method named and that no scenario claims an automated check it does
   not have.
-- [ ] 28. Confirm the fence held a second time, at review, after any merge or rebase:
+- [x] 28. Confirm the fence held a second time, at review, after any merge or rebase:
   `git diff --stat` against the branch point for `src/App.tsx` and `src/components/`.
-- [ ] 29. Confirm nothing under `openspec/changes/archive/` was edited or deleted, and that the
+- [x] 29. Confirm nothing under `openspec/changes/archive/` was edited or deleted, and that the
   root pointer files (`AGENTS.md`, `DESIGN.md`, `ORCHESTRATOR.md`, `README.md`, `neondb_guide.txt`)
   are all still present.
 
 ## Phase: archive
 
-- [ ] 30. Merge the `data-layer` delta into `openspec/specs/data-layer/spec.md` and the `game` delta
+- [x] 30. Merge the `data-layer` delta into `openspec/specs/data-layer/spec.md` and the `game` delta
   into `openspec/specs/game/spec.md`, including the `file:line` corrections noted in the game delta.
-- [ ] 31. Update `openspec/status.md`: gaps 1, 7, 9, 10 close. **Gaps 2, 8, and 11 do not close on
+- [x] 31. Update `openspec/status.md`: gaps 1, 7, 9, 10 close. **Gaps 2, 8, and 11 do not close on
   their own terms** — 2 is resolved by the convergence check in step 21 rather than by code, 8 is
   the explicit non-goal, and 11 is a standing boundary that is now recorded, not fixed. Write that
   distinction into the gap entries rather than closing them on a technicality.
-- [ ] 32. Update `openspec/conventions.md` if the new `src/data/` location or the `neon_auth`
+- [x] 32. Update `openspec/conventions.md` if the new `src/data/` location or the `neon_auth`
   boundary needs a gotcha entry, and confirm the hard-rule pointer table still resolves.
-- [ ] 33. Move the folder to `openspec/changes/archive/YYYY-MM-DD-driving-safety-question-bank/`.
+- [x] 33. Move the folder to `openspec/changes/archive/YYYY-MM-DD-driving-safety-question-bank/`.
   Warn before merging the destructive delta, per `rules.archive`.
 
 ---
 
 ## Deliberately not done
 
-- [ ] 34. The in-game footer credit at `src/App.tsx:472,474` — **open gap 8**. A copy and
+- [ ] 34. The in-game footer credit at `src/App.tsx:497,499` — **open gap 8**. A copy and
   authorship decision, not a data one. It needs an answer from the team, not a task here.
 - [ ] 35. Any visual change — background, car sprite, stoplight, question bubble. Owned by
   `arcade-scene-backdrop`, which must not be started until the fence check in step 14 is clean.
