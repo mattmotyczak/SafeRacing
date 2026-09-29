@@ -3,8 +3,10 @@
 **Change:** `driving-safety-question-bank`
 **Domain:** `data-layer`
 **Base spec:** `openspec/specs/data-layer/spec.md`
-**Status:** spec written — `design.md` and `tasks.md` written; nothing implemented
-**Closes:** open gaps 7, 9, 10, 11, and the smoke-test rows of gap 1
+**Status:** implemented and verified 2026-09-28 — `apply` and `verify` are done, `review` and `archive`
+remain. This delta now records what shipped; the migration name in two scenarios was corrected from
+`0002_driving_safety_question_bank` to `0002_driving_safety_bank`. **Not yet archived.**
+**Closes:** open gaps 1, 2, 7, 9, 10. Gap 11 is restated as a standing boundary here, not closed.
 
 > **This delta changes live data.** Unlike every prior data-layer change, applying it deletes
 > production rows. The approved scope is recorded verbatim in `design.md`; the change does not
@@ -50,7 +52,7 @@ order MUST match its offline twin in `src/data/`.
 
 #### Scenario: The offline fallback mirrors the served question
 
-- **Given** the live database, seeded by `0002_driving_safety_question_bank.sql`
+- **Given** the live database, seeded by `0002_driving_safety_bank.sql`
 - **When** a question is served by `GET /api/questions/:mode` and compared against the same question in `src/data/questions.easy.ts` / `questions.hard.ts`
 - **Then** its `options` array and `answer` index are identical, because both sides derive from the same `ord`-pinned seed
 
@@ -67,7 +69,7 @@ against the live database, not reasoned about.
 ### Requirement: The question bank is road-safety content in Spanish
 
 The seeded bank and the offline fallback SHALL contain driving-safety and road-safety questions in
-Spanish. **30 easy** questions and **approximately 80 hard** questions, replacing the 5 + 5
+Spanish. **30 easy** questions and **80 hard** questions, replacing the 5 + 5
 placeholders. No question, option, or distractor SHALL reference competitive motor racing.
 
 Every question MUST carry exactly four options and exactly one `iscorrect = TRUE` answer row. This
@@ -149,6 +151,16 @@ tables are unchanged after the rollback. Idempotency requires a live double-appl
 row-count and content-hash comparison. Neither is a `tsc` or grep check, and there is no test runner
 in this repo to hold them.
 
+> **Outcome, 2026-09-28: the structural half passed and both dynamic halves were NOT RUN.** The envelope,
+> delete ordering and `ORDER BY v.ord` terminators are all present and correct. The fault-injection check
+> and the live double-apply did not run — there is no local Postgres, `psql`, or Docker on this machine,
+> and the double-apply was never executed. **So `0002` has been run exactly once, against production,
+> and its idempotency and atomicity claims remain untested rather than confirmed.** The structural
+> verification that did run covers the 550-row round trip, contiguous `ord`, one `TRUE` per question,
+> and the SQL-to-TS parity; see `verify-report.md` §4. `tasks.md` 7 and 20 are left unticked for this
+> reason. A second apply is now safe to run if you want the check — the destructive scope of the first
+> run is behind it.
+
 ### Requirement: The `neon_auth` schema is out of scope and MUST NOT be touched
 
 The `neon_auth` schema in the same Neon database — 9 tables: `account`, `invitation`, `jwks`,
@@ -172,7 +184,7 @@ isolation depends on the identifiers in the SQL rather than on an enforced bound
 #### Scenario: `0002` leaves `neon_auth` untouched
 
 - **Given** the live database with 9 tables in `neon_auth`
-- **When** `0002_driving_safety_question_bank.sql` runs
+- **When** `0002_driving_safety_bank.sql` runs
 - **Then** no statement in the file targets `neon_auth` and its 9 tables and row counts are identical before and after
 
 #### Scenario: No migration drops a schema
@@ -186,6 +198,15 @@ without a database. The isolation claim is **not** greppable: it requires a read
 `information_schema` / `pg_catalog` count of the `neon_auth` tables and their rows before and after
 the apply, and it must be re-run whenever a migration is added. Stated plainly because the
 difference is the whole point of writing the requirement.
+
+> **Outcome, 2026-09-28: the `DROP` grep passed; the before/after count was NOT taken.** Zero matches
+> for `DROP SCHEMA` / `DROP DATABASE` across `db/migrations/`, and `0002` names no `neon_auth` object
+> in any statement — so it *cannot* have written to those 9 tables, and that weaker claim holds on
+> inspection. The **strong** claim in the scenario above, "its 9 tables and row counts are identical
+> before and after", was **not** established: no pre-apply snapshot of `neon_auth` was taken, so there
+> is no baseline to compare against. The scenario is therefore **half-verified, not passed.**
+> `tasks.md` 16 and 19 are left unticked. Snapshot those 9 tables' row counts before the next data-layer
+> change, and treat this boundary as *probably* intact rather than *proven* intact until then.
 
 ---
 

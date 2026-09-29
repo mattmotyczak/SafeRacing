@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Reference documents that are free public downloads but too large to version.
+# See references/README.md for what belongs here and how to get it.
+references/*.pdf

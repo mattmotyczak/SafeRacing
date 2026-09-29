@@ -2,7 +2,8 @@
 
 **Change:** `driving-safety-question-bank`
 **Domains:** `data-layer`, `game`
-**Status:** design complete; nothing implemented
+**Status:** implemented and verified 2026-09-28. Two decisions below were revised by what apply found —
+§9 and the verification table. **Not yet archived.**
 
 Nine decisions. Seven of them are non-obvious enough that a reasonable engineer would pick the
 other option, so each records the alternatives and why they lost.
@@ -12,7 +13,10 @@ other option, so each records the alternatives and why they lost.
 ## 1. A new `0002` migration, not an edit to `0001`
 
 `0001_bootstrap.sql` is **not** edited. The new bank goes in
-`db/migrations/0002_driving_safety_question_bank.sql`.
+`db/migrations/0002_driving_safety_bank.sql`. (The name in this sentence originally read
+`0002_driving_safety_question_bank`. The shorter name shipped: the migration replaces the *bank* and also
+repairs the answer ordering, so "bank" is the more accurate of the two, and it matches this folder's
+register. Corrected in place rather than renaming an already-applied file.)
 
 The reason is mechanical, and it is the kind of thing that fails silently.
 
@@ -175,7 +179,7 @@ terms. The reason that decided it is collision.
 A parallel agent is doing frontend visual design in `src/App.tsx` **right now**. A data migration
 and a visual redesign in the same file means a diff that neither author can read — one side is
 reviewing a thousand lines of Spanish question text, the other is reviewing a colour token, and
-the merge is a merge conflict in a 484-line component.
+the merge is a merge conflict in a 500-line component.
 
 Relocating the data to `src/data/` does three things at once: it removes the largest hunk from the
 contested file, it leaves only a two-line import in the place the banks used to be, and it makes
@@ -215,7 +219,7 @@ change is not a readability pass on the content.
 
 | Region | Current | What happens |
 |--------|---------|--------------|
-| **Lines 23-38** | `const db_easy` and `const db_hard`, 15 inline questions | Deleted. Replaced by two imports from `@/data/`. |
+| **Lines 23-38** | `const db_easy` and `const db_hard`, 15 inline questions | Deleted. Replaced by two relative imports from `./data/` at `App.tsx:14-15` — there is no `@/*` alias in this repo. |
 | **Around line 101** | `setCurrentQuestion(db[randomIndex])` inside `getNewQuestion` | Becomes a no-repeat draw plus a Fisher-Yates reshuffle with an `answer` remap. |
 
 **It touches nothing else in that file.** No JSX, no className, no `motion` prop, no component
@@ -268,6 +272,11 @@ rather than because it was overlooked.
 
 ## 9. No-repeat tracking is a soft exclusion, not a shuffle bag
 
+> **Superseded during apply, 2026-09-28.** The decision below — exclude *only* the immediately previous
+> question — shipped as something **stronger**, and the weaker version turned out to contain a real bug.
+> Read the note at the end of this section before relying on any of the reasoning here. The reasoning
+> about *not* using a shuffle bag, and about the 1-question edge case, still stands.
+
 `getNewQuestion` excludes the previously drawn question when the bank holds more than one entry,
 and falls back to the full bank when exclusion leaves nothing.
 
@@ -291,6 +300,32 @@ last run ended.
 two-slot history for a marginal gain, and on a 30-question easy bank the marginal gain is not
 measurable.
 
+### What apply actually shipped, and the bug in the weaker rule
+
+The design above asks for one thing: exclude the previous question. The implementation is **draw
+without replacement until the bank is exhausted**, tracked in an `askedIds` ref, and that is a
+different and better rule — a 30-question easy bank now cannot repeat within a lap, which a
+one-slot memory cannot guarantee. The `0002` bank sizes make the difference real rather than
+theoretical.
+
+The first implementation of the stronger rule still had a defect, and this is the one part of
+`design.md` that was wrong in a way that mattered. `askedIds` is cleared when the pool exhausts, so at
+that seam the first question of the new lap could be the last question of the previous lap. Measured:
+**2 immediate repeats in 4,000 easy draws.** Review did not catch it — a reviewer reads the intent
+and confirms the code matches; it does not measure. Simulation did.
+
+The fix is a second ref, `lastId`, excluded from the fresh pool on the exhausted branch, guarded by
+`db.length > 1` so a one-question bank cannot build an empty pool. After it: 0 repeats in 30,000
+draws per bank, each lap served complete.
+
+**Two rules that should carry forward.** A reset that discards the one piece of state needed to
+prevent the bad case is its own bug class — here the reset was *correct* and still opened the seam. And
+exclusion must key on `db.indexOf(picked)`, not a pool-relative index: the pool comes from
+`.filter()`, so pool-relative indices shift as it shrinks and the exclusion silently stops working.
+
+**The delta spec still describes the weaker rule** and must be updated before archive. See
+`verify-report.md` §7 and `tasks.md` §Corrections, item 3.
+
 ---
 
 ## Verification strategy
@@ -300,21 +335,29 @@ is explicit that one must not be added uninvited. So each requirement names how 
 checked, and the split between "greppable" and "needs a human with the app open" is drawn
 honestly rather than flattened.
 
-| Claim | How it is checked | Automatable here? |
-|-------|-------------------|-------------------|
-| Types are sound | `npx tsc --noEmit` | yes |
-| No question data left in `App.tsx` | grep for `const db_easy` / `const db_hard` | yes |
-| **The fence held** | `git diff --stat src/App.tsx` — import block, deleted banks, draw function, nothing else | yes |
-| No racing content in the new bank | framing audit over `src/data/` and `db/migrations/0002` | yes |
-| No `DROP SCHEMA` / `DROP DATABASE` | grep over `db/migrations/` | yes |
-| 4 options, exactly 1 correct per question | SQL `GROUP BY` with `HAVING count(*) <> 4 OR count(*) FILTER (WHERE iscorrect) <> 1` returning zero rows | yes, against Neon |
-| Live and fresh converge | live id order vs the seed's `ord`; served-vs-fallback comparison per question | yes, against Neon |
-| `neon_auth` untouched | row counts of its 9 tables before and after | yes, read-only |
-| Migration cannot half-apply | inject a fault mid-file against a throwaway schema; assert the tables are unchanged after rollback | yes, and it must be run |
-| Applying `0002` twice is idempotent | live double-apply plus a before/after content hash | yes, against Neon |
-| **The remap never mislabels a correct answer** | draw repeatedly and confirm the marked option is right **every** time | **no** — needs a browser |
-| **The no-repeat rule holds across draws** | manual pass over several consecutive draws | **no** — needs a browser |
-| **Question content is accurate** | a human reading 110 questions against the cited source | **no** |
+| Claim | How it is checked | Automatable here? | Outcome |
+|-------|-------------------|-------------------|---------|
+| Types are sound | `npx tsc --noEmit` | yes | **passed**, exit 0 |
+| No question data left in `App.tsx` | grep for `const db_easy` / `const db_hard` | yes | **passed** — the names survive only as import aliases at `App.tsx:14-15` |
+| **The fence held** | `git diff --stat src/App.tsx` — import block, deleted banks, draw function, nothing else | yes | **passed** — lines 11, 23, 38, 90-125, 137; `src/components/` and `src/index.css` untouched |
+| No racing content in the new bank | framing audit over `src/data/` and `db/migrations/0002` | yes | **passed**, 0 rows |
+| No `DROP SCHEMA` / `DROP DATABASE` | grep over `db/migrations/` | yes | **passed** |
+| 4 options, exactly 1 correct per question | SQL `GROUP BY` with `HAVING count(*) <> 4 OR count(*) FILTER (WHERE iscorrect) <> 1` returning zero rows | yes, against Neon | **passed**, 0 offenders both banks |
+| Live and fresh converge | live id order vs the seed's `ord`; served-vs-fallback comparison per question | yes, against Neon | **passed** — first four easy questions return the correct option at index 1, 2, 3, 3, identical to the TS bank |
+| `neon_auth` untouched | row counts of its 9 tables before and after | yes, read-only | **NOT RUN** — no before/after snapshot was taken. Only the weak claim holds: `0002` names no `neon_auth` object and contains no `DROP` |
+| Migration cannot half-apply | inject a fault mid-file against a throwaway schema; assert the tables are unchanged after rollback | yes, and it must be run | **NOT RUN** — no local Postgres, `psql`, or Docker. `0002` has run exactly once, against production |
+| Applying `0002` twice is idempotent | live double-apply plus a before/after content hash | yes, against Neon | **NOT RUN** — unverified, not disproved |
+| **The remap never mislabels a correct answer** | draw repeatedly and confirm the marked option is right **every** time | **was believed to need a browser** — see below | **passed** by simulation, 30,000 draws per bank, 0 mislabels. Still worth one human pass in the UI |
+| **The no-repeat rule holds across draws** | manual pass over several consecutive draws | **was believed to need a browser** — see below | **passed** by simulation — but only *after* the `lastId` fix caught a real 2-in-4,000 defect the manual pass would likely have missed |
+| **Question content is accurate** | a human reading 110 questions against the cited source | **no** | **outstanding** |
+
+**Two rows in this table were wrong about their own automatability.** The last two were filed as
+needing a browser, on the reasonable grounds that they are properties of the running game. They are not:
+both are pure functions of the two bank arrays and a `Math.random()` sequence, so a headless harness over
+the same data answers them completely — and the no-repeat row, the one expected to need a human eye, is
+the one that found a bug. **Prefer simulation over inspection for anything that is a function of data
+rather than of rendering.** The rows are not removed: "needs a browser" was the right call about *content
+accuracy*, which is a reading task and is still open.
 
 The three "no" rows are the ones that matter most. A wrong remap makes the game unwinnable and
 looks like bad luck to a player; an inaccurate speed limit teaches a high-school student the wrong

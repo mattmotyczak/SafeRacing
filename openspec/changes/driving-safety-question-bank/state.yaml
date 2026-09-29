@@ -1,0 +1,186 @@
+change: driving-safety-question-bank
+terminal_state: verified
+schema: spec-driven
+artifact_store: openspec
+project: saferacing
+opened: 2026-09-28
+implemented: 2026-09-28
+phases:
+  explore: done
+  propose: done
+  spec: done
+  design: done
+  tasks: done
+  apply: done
+  verify: done
+  review: pending
+  archive: pending
+artifacts:
+  exploration: null
+  proposal: proposal.md
+  spec: [specs/data-layer/spec.md, specs/game/spec.md]
+  design: design.md
+  tasks: tasks.md
+  verify_report: verify-report.md
+depends_on: []
+blocks: [arcade-scene-backdrop]
+closes_gaps: [1, 2, 7, 9, 10]
+gap_semantics:
+  note: >-
+    Gap 2 does not close by code. It closes because the live answer primary keys were rewritten by 0002
+    so the served option order now equals the offline bank's order — verified by reading
+    array_agg(answer ORDER BY ideasyanswer) for the first four easy questions and getting the correct
+    option at index 1, 2, 3, 3, identical to src/data/questions.easy.ts. The fix for gap 2 was
+    pre-existing (gap 10's ORDER BY v.ord); this change is what finally ran it against the live database.
+  gap_2: resolved-by-convergence-check
+  gap_11: >-
+    NOT closed. It is a standing boundary, now recorded as a requirement in
+    openspec/specs/data-layer/spec.md rather than fixed. The isolation claim is asserted by grep
+    (0002 names no neon_auth object, contains no DROP), not proven by a before/after snapshot.
+  gap_8: >-
+    NOT closed and explicitly a non-goal. The footer credit is an authorship decision, not a content one,
+    and lives in JSX outside the collision fence.
+source_of_truth:
+  manual:
+    title: "Manual del conductor de vehículos clade 4 ruedas (4R)"
+    publisher: "Gobierno de la Ciudad de Buenos Aires"
+    edition: 2023
+    local_filename: "MANUAL_Vehiculo_4Ruedas_2023 SA.pdf"
+    size_mb: 68.3
+    how_to_obtain: >-
+      Free public GCBA publication. Download fresh on whichever machine needs it and drop it in
+      references/, which is gitignored. NOT committed to this repo — see not_committed.manual.
+    extraction_verified_on: 2026-09-28
+  manual_extraction: >-
+    200 pages, ~265,275 characters, text layer only. pypdf 6.19.0. NOT a scan despite the 68 MB size.
+    PDF page index is offset by 1 from the printed page: pages[i] is printed page i+1, so citations read
+    (p<n>) using the printed number.
+  manual_pitfalls: >-
+    (1) The text layer carries NO accents — cinturon extracts as cintur?n — so every search must be
+    diacritic-insensitive, or a literal search silently returns zero and the fact looks absent.
+    (2) The speed-limit TABLE is a graphic and is NOT in the text layer: searches for '60 km/h',
+    '100 km/h' and 'Limites de velocidad' all return zero pages. Speed figures are therefore cited to
+    Ley 24.449 art. 51, not to the manual. A missing number does not mean the manual lacks it.
+  corrects_a_source: >-
+    The manual states the safe following distance is TWO seconds (p71). The commercial study site
+    Trivorio says one second. The manual is authoritative and one second is wrong.
+  exam_format: >-
+    Deliberately absent from the bank. Trivorio says 40 questions / 34 to pass; cursodemanejo says 30 / 23;
+    the official GCBA page is silent. Unresolved, so no question asserts it.
+artifacts_written:
+  - db/migrations/0002_driving_safety_bank.sql
+  - src/data/questions.easy.ts
+  - src/data/questions.hard.ts
+  - src/App.tsx
+live_data_state:
+  verified_on: 2026-09-28
+  easy_questions: 30
+  easy_answers: 120
+  hard_questions: 80
+  hard_answers: 320
+  total: 550
+  answer_integrity: 0 questions without exactly 4 options, 0 without exactly 1 iscorrect
+  f1_residue: 0 rows
+  photostring_nonnull: 0
+  max_question_length: 83 easy / 107 hard, against VARCHAR(255)
+  sequence_restarted: easy_questions_ideasyquestion_seq.last_value = 30
+unverified:
+  - id: pre-apply-snapshot
+    detail: >-
+      Not taken. The 42,420-byte photo on the Test row is permanently gone. The deletion was approved
+      with an exact scope, but the counts that approval rests on came from a prior session, not a fresh
+      pre-state record. Nothing else in the change is irreversible.
+  - id: throwaway-schema-probe
+    detail: "tasks.md 6-7. No local Postgres, no psql, no Docker."
+  - id: neon_auth_snapshot
+    detail: "tasks.md 16, 19. Isolation asserted by grep only; no before/after row counts exist."
+  - id: live-double-apply
+    detail: "tasks.md 20. Idempotency is the claim and remains untested, not disproved."
+  - id: endpoint-contract
+    detail: "tasks.md 22. The API server was never started this session."
+bugs_found_during_apply:
+  - id: lap-seam-immediate-repeat
+    found: 2026-09-28
+    where: src/App.tsx getNewQuestion
+    defect: >-
+      Draw-without-replacement reset its served-array at pool exhaustion, so the first question of a new
+      lap could be the last question of the previous lap. Measured 2 immediate repeats in 4,000 easy
+      draws. Review did not catch it; simulation did.
+    fix: >-
+      A second ref, lastId, is excluded from the fresh pool on the exhausted branch, guarded by
+      db.length > 1 so a one-question bank cannot build an empty pool. After the fix, 0 repeats in
+      30,000 draws per bank.
+    species: a reset that discards the one piece of state needed to prevent the bad case
+design_refinements:
+  - id: no-repeat-is-stronger-than-specced
+    rule: >-
+      tasks.md 13 and the game delta spec describe excluding only the PREVIOUSLY DRAWN question. What
+      shipped is full draw-without-replacement until exhaustion plus the lastId seam guard. The weaker
+      rule is the one that produces the lap-seam repeat. design.md and the delta spec must be updated to
+      carry the stronger form before archive.
+  - id: answer-remap-is-runtime-not-type
+    rule: >-
+      The remap is the load-bearing half of the shuffle: answer is recomputed as
+      options.indexOf(picked.options[picked.answer]), capturing the correct option's TEXT before the
+      swap. Shuffling without remapping marks every correct answer wrong and tsc cannot see it.
+  - id: pool-index-vs-db-index
+    rule: >-
+      Exclusion must key on db.indexOf(picked), not a pool-relative index. The pool comes from .filter(),
+      so pool-relative indices shift as it shrinks and the exclusion would silently stop working.
+tracked_gaps:
+  note: >-
+    Recorded rather than erased. Not listed in closes_gaps because a gap belongs there only when this
+    change actually closes it.
+  items:
+    - id: audit-allowlist-excludes-change-folders
+      file: openspec/config.yaml
+      found: 2026-09-28
+      defect: >-
+        rules.verify.audits is file-level and does not include openspec/changes/**, so a change folder
+        cannot quote the strings it exists to correct. verify-report.md refers to gap 8 and to the
+        offending literals by description rather than by value.
+      status: undecided
+      options: >-
+        Add openspec/changes/** to the allowlist with a correction-note reading rule, or accept that
+        gap-closing changes must refer to gaps by number only.
+    - id: gap-8-footer
+      file: src/App.tsx footer panel
+      status: open-by-design
+      detail: Copy and authorship decision, not a data one. Explicit non-goal of this change.
+method_notes:
+  - >-
+    Two verification rounds failed on my own regexes, not on the artifact: a `$` anchor placed before a
+    trailing comma reported 2 rows instead of 110, and an over-greedy pattern matched (ord, 'answer')
+    pairs out of the answer block and contaminated every set. max_q=2 was the tell. When a structural
+    verifier reports an absurd count, suspect the verifier and print raw lines before touching the file.
+  - >-
+    A one-question bank must repeat, so "zero repeats" is a valid invariant only when db.length > 1.
+    Assert it conditionally rather than reading that failure as a code defect.
+  - >-
+    max(CASE WHEN iscorrect THEN 1 ELSE 0 END) returns 1, not a position; it cannot locate the correct
+    answer. Read the aggregated array directly, or use array_position(array_agg(...), <correct text>).
+  - >-
+    Neon console table views page at 50 rows. A "max of 50 per table" report with one smaller table
+    showing everything is a page boundary, not a truncated insert.
+  - >-
+    The explicit BEGIN/COMMIT in 0002 means a failed run can only leave 0 rows or all 550. That argument
+    needs no database access and refutes a partial-insert report on its own.
+next_phase: review
+not_committed:
+  note: >-
+    Nothing from this change is committed. src/App.tsx is modified and
+    db/migrations/0002_driving_safety_bank.sql is untracked. A parallel frontend agent is live in the
+    same repo; the fence in design.md section 7 must be re-checked before staging either file.
+  manual:
+    thing: references/MANUAL_Vehiculo_4Ruedas_2023 SA.pdf
+    status: deliberately never committed
+    reason: >-
+      68.3 MB, a copyrighted GCBA publication, in a PUBLIC repository with no Git LFS. Committing it
+      would grow .git from 0.8 MB to ~69 MB permanently — a pushed blob is unreclaimable by git rm, and
+      the only real removal is a history rewrite that changes every commit hash on new_designs and
+      forces a full re-clone. The document is a free public download, so the blob buys a download that
+      costs nothing and stores a copyrighted work permanently and publicly.
+    do_not: >-
+      Do not "fix" this by adding the PDF, and do not raise .gitignore to un-ignore it. The tracked
+      references/README.md documents the retrieval instead. If a future change genuinely needs the file
+      in-repo, set up Git LFS first and get an explicit decision from the maintainer.

@@ -18,6 +18,24 @@
 > fixed alongside it: the tree count ignored the tile's period count, the hill off-seam claim
 > asserted a constraint it never specified, and the ground-seam severity was understated.
 >
+> **Amended 2026-09-28 after design-phase reconciliation (R-1…R-10).** The design phase validated
+> this delta against source and raised 10 self-contradictions in its
+> [Reconciliation ledger](design.md#reconciliation-ledger). The orchestrator ruled on all ten and
+> each ruling is applied here. R-1 (delete 11, not 12), R-2 (score-HUD `pixel-panel` chip + a
+> per-site mapping replacing the 9-site blanket claim), R-3 (census widened to 17 white/black
+> utilities), R-4 (`--color-scene-car-body` **replaces** `--color-car-tier5`), R-5 (escape hatch
+> keeps `translateX(-50%)`), R-6 (the two live bugs are **not** the same bug, and they ship in
+> different PRs), R-7 (the `(was 30 s)` and `(was 1.2 s)` annotations are deleted as fiction),
+> and R-8 (the ground tint and road dashes draw from the scene palette). R-9 was resolved by
+> instruction and R-10 is recorded as a pre-existing verify blocker in `state.yaml`.
+>
+> **Two line-number bases are in use in this file, deliberately.** Citations in the pre-existing
+> text are **HEAD `e26fcf1`**. `src/App.tsx` carries uncommitted working-tree changes (the
+> question-bank extraction into `src/data/questions.*` plus draw-without-replacement) that shift
+> every line below ~30 by **+25**. Citations introduced by this amendment are marked
+> **working tree** and carry the shifted numbers. A `file:line` is only meaningful against the
+> basis named beside it.
+>
 > **Source of truth for the layer table.** The table in *Background scroll layers* below is the
 > **single source of truth** for this change. `proposal.md` and `exploration.md` each carry an
 > **older, different** table (a third set: hills 240 px / 18 s, mid 480 px / 10 s, sky 1920 px /
@@ -42,9 +60,9 @@ dashes — plus four new daytime-cartoon scenery layers. All are CSS-only: the
 |-------|-------|-----------|------|--------|----------|-------|-------|
 | **Sky (backmost)** | `.arcade-scroll-sky` | `w-[3840px]` | 2 × `w-[1920px]` | **128 px** (was 100) | **120 s** (was 25) | **16 px/s** | far |
 | Hills | `.arcade-scroll-hills` | `w-[3840px]` | 2 × `w-[1920px]` | 640 px | 60 s | 32 px/s | far |
-| Trees | `.arcade-scroll-trees` | `w-[3840px]` | 2 × `w-[1920px]` | 240 px | **25 s** (was 30) | 76.8 px/s | far |
+| Trees | `.arcade-scroll-trees` | `w-[3840px]` | 2 × `w-[1920px]` | 240 px | 25 s | 76.8 px/s | far |
 | Ground tint | `.arcade-scroll-ground` | `w-[3840px]` | 2 × `w-[1920px]` | 40 px | 10 s | 192 px/s | surface |
-| Road edge lines | `.arcade-scroll-edges` | `w-[3840px]` | 2 × `w-[1920px]` | 60 px | **2 s** (was 1.2) | 960 px/s | road |
+| Road edge lines | `.arcade-scroll-edges` | `w-[3840px]` | 2 × `w-[1920px]` | 60 px | 2 s | 960 px/s | road |
 | Rumble strip | `.arcade-scroll-rumble` | `w-[3840px]` | 2 × `w-[1920px]` | 192 px | 2 s | 960 px/s | road |
 | Road dashes | `.arcade-scroll-dashes` | `w-[3840px]` | 2 × `w-[1920px]` | 192 px | 2 s | 960 px/s | road |
 
@@ -56,7 +74,8 @@ ground, then road paint over ground. Speeds rise strictly with proximity —
 `w-[1920px]` tiles.** Sky and ground are migrated off `w-1/2`. This includes the two
 viewport-dependent layers that the previous version of this delta excused — see
 *Requirement: Every layer's tile width is congruent to 0 modulo its own period* for why that
-excuse was false and what the live bug was.
+excuse was false, and note that the two layers' failures are **different bugs**, not one bug
+observed twice.
 
 **The period change and the tile migration are one atomic change, not two.** The new 128 px sky
 period is valid **only** on the fixed 1920 px tile: `1920 mod 128 = 0`, but on a `w-1/2` tile at
@@ -78,9 +97,10 @@ Every layer MUST be `animation-play-state: paused` by default and MUST only run 
 `motion-reduce:animate-none` **and** an entry in the `prefers-reduced-motion` block at the
 bottom of `src/index.css` — two places, no exceptions.
 
-(Previously: three layers, sky at period 100 px and ground at 40 px on `w-1/2` tiles, trees at
-30 s, a first-draft edge-line duration of 1.2 s, and a false justification that `w-1/2` was safe
-for infinitely repeating gradient fills.)
+(Previously: three layers — sky at period 100 px and ground at 40 px on `w-1/2` tiles in a
+`w-[200%]` container, dashes already on two fixed `w-[1920px]` tiles. There were no hills, trees,
+edge-line or rumble layers, and the base spec's rationale for the `w-1/2` sky and ground was an
+unverified `W mod period` congruence.)
 
 #### Scenario: The scenery does not seam across cycles
 - **GIVEN** the game panel is 1100 px wide
@@ -164,27 +184,96 @@ is a hard offset*. The accepted-exception count for soft shadows goes from three
 The hard offset at `App.tsx:319` (`shadow-[4px_4px_0_var(--color-hard-shadow)]`) is not an
 exception; it is the sanctioned form.
 
-**These unsanctioned sites MUST be tokenised:**
+**These unsanctioned white/black colour utilities MUST be tokenised — all 17, or none.**
+`App.tsx` line numbers below are **working tree**.
+
+| Utility | Count | Sites (working tree) | Replaced with |
+|---------|-------|----------------------|---------------|
+| `text-white` | 8 | `App.tsx` 339, 360, 369, 376, 409, 439, 453, 469 | `--color-on-dark` — see the per-site mapping below |
+| `hover:text-white` | 1 | `App.tsx:381` (back link) | `--color-on-dark` |
+| `border-white/5` | 3 | `ArcadeBackground.tsx` 34, 60, 69 | a `@theme` token |
+| `bg-white/10` | 2 | `App.tsx` 312 (life pips), 471 (HUD divider) | a `@theme` token |
+| `border-white/10` | 1 | `App.tsx:405` (question photo) | a `@theme` token |
+| `bg-black/20` | 1 | `App.tsx:405` (question photo) | a `@theme` token |
+| `hover:bg-white/5` | 1 | `App.tsx:453` (the "Jugar" button) | a `@theme` token |
+| **Subtotal — white/black utilities in `src/**/*.tsx`** | **17** | | |
+
+**The sanctioning rationale, stated once for the whole group.** Each of these is a raw Tailwind
+palette step or step-opacity standing in for a colour the theme already owns a name for. The
+project's rule is that a colour is a token, and an `/opacity` variant of a built-in step is the
+same un-tokenised colour with a number bolted on. Tokenising some and leaving others is not a
+middle position — it produces a theme where the same value is named in one place and spelled
+inline in another, which is strictly worse than either uniform choice. So the group is
+**all-or-nothing**: all 17 are tokenised, and no new alpha-white or alpha-black token is minted
+for them, because every one of them is an overlay or divider on a surface that already has a
+token, and the opacity is part of the role, not a separate colour.
+
+**Two further groups, listed separately because they are neither white/black nor `.tsx` sites:**
 
 | Site | Count | Replaced with |
 |------|-------|---------------|
-| `text-white` / `hover:text-white` in `App.tsx` | 9 — lines 314, 335, 344, 351, 356, 384, 414, 428, 444 | `--color-on-dark` `#fff1e8` |
 | `bg-slate-900/20` at `ArcadeBackground.tsx:57` | 1 | a `@theme` token |
-| `border-white/5` at `ArcadeBackground.tsx:34, 60, 69` | 3 | a `@theme` token |
-| 5 hard-coded `rgba()` values in `.scanline` at `index.css:73-74` | 5 | `@theme` tokens |
+| hard-coded `rgba()` values in `.scanline` at `index.css:73-74` — `rgba(18,16,16,0)`, `rgba(0,0,0,0.25)`, `rgba(255,0,0,0.06)`, `rgba(0,255,0,0.02)`, `rgba(0,0,255,0.06)` | 5 | `@theme` tokens |
 
-`--color-on-dark` is currently dead; this change is its first consumer.
+**23 unsanctioned sites in total: 17 white/black utilities in `src/**/*.tsx`, plus 1
+`bg-slate-900/20`, plus 5 `.scanline` `rgba()` values in `src/index.css`.** The three counts are
+stated separately on purpose — a single blended total is the arithmetic error this table exists
+to remove.
+
+**The 9 `text-white` sites MUST map per-site, not by blanket rule.** Eight of them take
+`--color-on-dark`; **one is the exception** and is named as such, because its backing surface
+changes in this change:
+
+| Site | Working tree | Backing surface after this change | Contrast |
+|------|--------------|-----------------------------------|----------|
+| menu `<h1>` | `App.tsx:339` | `.pixel-panel` over `--color-surface` | 15.43:1 ✅ |
+| mode `<h2>` | `App.tsx:360` | same | 15.43:1 ✅ |
+| difficulty "Fácil" | `App.tsx:369` | same | 15.43:1 ✅ |
+| difficulty "Realista" | `App.tsx:376` | same | 15.43:1 ✅ |
+| back link | `App.tsx:381` | same | 15.43:1 ✅ |
+| question `<h3>` | `App.tsx:409` | same | 15.43:1 ✅ |
+| game-over `<h2>` | `App.tsx:439` | same | 15.43:1 ✅ |
+| "Jugar" button | `App.tsx:453` | `.pixel-panel` with solid `bg-surface` | 15.43:1 ✅ |
+| **score value — THE EXCEPTION** | `App.tsx:469` | **the new `.pixel-panel` HUD chip this change adds** | 15.43:1 **only because of the chip** |
+
+The score value is the exception because it is the **only** one of the nine whose surface is
+`status === 'playing'`, which means its background is the new bright scene. Against sky-top
+`#5ec5f5` the mapped token measures **1.76:1** and `#ffffff` measures **1.95:1** — both fail. It
+is legible **only** because *The score HUD carries a pixel-panel chip* puts a `.pixel-panel`
+behind it. The claim "all 9 sites take `--color-on-dark`" was withdrawn because it is true only
+as a class-name swap and false as a legibility claim, and the two must not be conflated.
+
+`--color-on-dark` is currently dead; the eight non-exception sites are its first consumers.
 
 **`--color-scene-*` MUST exist.** `AGENTS.md` hard rule 1 and the previous version of this delta
 both refer to a `--color-scene-*` namespace in `src/index.css`. **It does not exist today.** The
 namespace MUST be created, holding the scene palette in *The scene palette is a fixed token set*.
 
-**Dead tokens MUST be removed.** 13 `--color-*` tokens have zero consumers: `--color-on-dark`
-is retained (it becomes live above), and the following 12 MUST be deleted: `--color-accent-blue`,
-`--color-accent-yellow` (becomes live as the sun), `--color-accent-green`, `--color-accent-pink`,
-`--color-surface-bright`, `--color-surface-container-lowest`, `--color-surface-container-low`,
-`--color-surface-container`, `--color-surface-container-high`, `--color-surface-container-highest`,
-`--color-secondary`, `--color-danger-text`.
+**Dead tokens MUST be removed. The count is 11, and the subtraction is shown so it is checkable.**
+
+```
+13  --color-* tokens have zero consumers today
+ -1  --color-on-dark          RETAINED — it becomes live at the 8 sites above
+ -1  --color-accent-yellow    RETAINED — it becomes live as the sun
+ = 11 deletions
+```
+
+The 11, and only these 11, MUST be deleted: `--color-accent-blue`, `--color-accent-green`,
+`--color-accent-pink`, `--color-surface-bright`, `--color-surface-container-lowest`,
+`--color-surface-container-low`, `--color-surface-container`, `--color-surface-container-high`,
+`--color-surface-container-highest`, `--color-secondary`, `--color-danger-text`.
+
+**Two further tokens are LIVE today and are retired by this change, and they are not part of the
+11.** They are listed separately so the two groups are never added together by accident:
+
+| Token | Current value | Retired because | Successor |
+|-------|---------------|-----------------|-----------|
+| `--color-track-line` | `rgba(41, 173, 255, 0.04)` | its only consumer is the ground-tint layer fill, which this change repoints — see *Ground tint and road dashes draw from the scene palette* | `--color-scene-road` |
+| `--color-dash` | `rgba(255, 255, 255, 0.15)` | its only consumer is the dash-layer fill, likewise repointed | `--color-scene-road-dashes` |
+
+**13 declarations are removed from `@theme` in total — 11 dead + 2 retired** — plus
+`--color-car-tier5`, which is retired by replacement rather than by repointing; see *Car sprite
+states and lives-based recoloring*.
 
 **The comment at `index.css:19` MUST be deleted.** It reads `/* Legacy tokens kept for backward
 compatibility */` and sits above 11 declarations. The claim is **false in both directions**:
@@ -195,8 +284,20 @@ believe a falsehood about the theme.
 
 **Verify:** `Select-String -Pattern '#[0-9a-fA-F]{3,8}\b|rgba?\(' src\*.tsx src\**\*.tsx` MUST
 return **zero** matches, down from exactly three. Then a second audit over `src/index.css`: zero
-hard-coded `rgba()` outside a token declaration, `--color-scene-*` present, and each of the 12
-named tokens absent. Both are greps.
+hard-coded `rgba()` outside a token declaration, `--color-scene-*` present, each of the **11**
+dead tokens absent, and each of the **3** retired or replaced tokens absent. Both are greps. The
+contrast figures in the per-site mapping are a **computed contrast ratio**, not an in-browser
+observation.
+
+#### Scenario: The `text-white` replacement is mapped per site, not uniformly
+- **GIVEN** the nine former `text-white` / `hover:text-white` sites in `App.tsx`
+- **WHEN** each site's backing surface and mapped token are read
+- **THEN** eight map to `--color-on-dark` over a `.pixel-panel` surface, and the score value at `App.tsx:469` is the single named exception, legible only because the HUD chip requirement places a `.pixel-panel` behind it
+
+**Verify:** code read of each of the nine sites against the per-site mapping table, plus a
+**computed contrast ratio** — 15.43:1 for `--color-on-dark` on `--color-surface` `#1a1a2e`, and
+1.76:1 for the same token against sky-top `#5ec5f5` (1.95:1 for `#ffffff`). No script can
+confirm the chip is present; that is a class read.
 
 ### Requirement: Car sprite states and lives-based recoloring
 
@@ -206,9 +307,14 @@ named tokens absent. Both are greps.
 - **Moving** — body wrapped in `.car-bounce` (`steps(1)`, 300 ms infinite).
 - **Crashed** — body offset by 2 units with damage marks, no bounce.
 
-The base scene body colour MUST be `--color-scene-car-body` `#ffc23a`. **Lives-based recoloring
-is preserved**: the `--color-car-tier*` tokens remain the mechanism by which remaining lives
-change the body colour, and at `lives >= 5` a `.car-aura` overlay MUST render.
+**Body color MUST come from the lives tier tokens, and the 5+ rung MUST be
+`--color-scene-car-body` `#ffc23a`.** `--color-scene-car-body` **REPLACES** `--color-car-tier5`:
+it is that rung under a scene name, not a base skin layered under a recolouring mechanism. The
+two hexes are 1.05:1 apart — the same colour to the eye — and keeping both would leave
+`--color-scene-car-body` **born dead**: `carColor(lives)` has no path that returns `#ffc23a`, so a
+separate "base skin" token would be defined and never read, which is the exact defect this
+change is auditing out of the theme. **`--color-car-tier5` MUST be deleted** from `@theme` as
+part of this replacement.
 
 | lives | token | value |
 |-------|-------|-------|
@@ -216,19 +322,39 @@ change the body colour, and at `lives >= 5` a `.car-aura` overlay MUST render.
 | 2 | `--color-car-tier2` | `#7ba7c9` |
 | 3 | `--color-car-tier3` | `#8ed5ff` |
 | 4 | `--color-car-tier4` | `#7dd3fc` |
-| 5+ | `--color-car-tier5` | `#facc15` |
+| 5+ | `--color-scene-car-body` | `#ffc23a` |
 
-(Previously: body colour came *only* from the lives tier tokens; there was no scene base body
-colour. The tier table is unchanged.)
+At `lives >= 5` a `.car-aura` overlay MUST render.
+
+**The remaining legibility obligation: the four tier colours MUST stay distinguishable from
+`#ffc23a` at 2× scale.** The hero sprite renders the 64-unit viewBox at 128 px
+(`App.tsx:247`), so every unit is 2 screen pixels and adjacent-tier separation is judged at
+2×. Adjacent-pair contrast against `#ffc23a` is tier1↔tier2 **1.86**, tier2↔tier3 **1.59**,
+tier3↔tier4 **1.04** — the top of the ladder is a few degrees of hue apart. Body hue therefore
+MUST NOT be treated as the lives channel: the five life pips and the `aria-label` carry lives,
+and the body colour is flavour. The obligation is to keep tiers 1–4 legible, not to make hue
+carry the signal.
+
+(Previously: body colour came *only* from the five `--color-car-tier*` tokens, with
+`--color-car-tier5` `#facc15` as the 5+ rung, and there was no scene body colour. The tier
+table is otherwise unchanged and `--color-car-tier5` is deleted, not kept as a duplicate.)
 
 #### Scenario: The sprite announces remaining lives to assistive tech
 - **GIVEN** any game state
 - **WHEN** the sprite is rendered with 3 lives
 - **THEN** the `<svg>` carries `role="img"` and `aria-label="Car sprite — 3 lives remaining"`
 
-**Verify:** code read of `CarSprite.tsx:24-32,100,117-123`. **Open:** whether the scene base
-body colour and the tier recoloring can coexist without the tier table becoming visually
-indistinguishable against `#ffc23a` is a `design.md` question, not a requirement.
+#### Scenario: Five or more lives fills the body with the scene token
+- **GIVEN** the sprite is rendered with 5 lives
+- **WHEN** the body fill is resolved
+- **THEN** it is `var(--color-scene-car-body)` and no path returns `var(--color-car-tier5)`
+
+**Verify:** code read of `CarSprite.tsx:24-32,100,117-123` (working tree) — the 5-arm
+`carColor(lives)` switch and its `default` arm MUST return the scene token, and
+`--color-car-tier5` MUST be absent from `src/index.css` and from `src/`. **Not verifiable by
+any script:** whether tiers 1–4 are distinguishable from `#ffc23a` at 2× is a **human sign-off
+item** — a person with the app open and the sprite at 2×. The adjacent-pair ratios above are
+computed and are the evidence that it is a risk, not the confirmation that it is acceptable.
 
 ### Requirement: Rounded corners
 
@@ -304,8 +430,30 @@ tile_width  ≡ 0 (mod period)
 pan         ≡ 0 (mod period)      and with the fixed geometry, pan = tile_width = 1920
 ```
 
-**Two live bugs exist today and MUST be fixed in PR1.** Both are recorded as defects, not as
-features:
+**Two live defects exist today. They are the same invariant failing at two sites with OPPOSITE
+symptoms, and they MUST NOT be described, scoped, or fixed as one bug.** Both are fixed by the
+end of the change, but they ship in different PRs — ground in **PR1**, sky in **PR2** — because
+the sky's period change is inseparable from its tile migration and its complete redraw, and
+PR1's defining property is that it changes no composition. The distinguishing arithmetic:
+
+| | **Ground** | **Sky** |
+|---|---|---|
+| Period today | 40 px | 100 px |
+| Tile today | `w-1/2` in `w-[200%]` | `w-1/2` in `w-[200%]` |
+| `1100 mod period` | **20** → **seams** at the project's own `max-w-[1100px]` | **0** → **clean at 1100 px** |
+| `720 mod period` | **0** → **clean** at 720 px | 20 → seams |
+| Also seams at | 1080, 1180, 1440, 1920 — any `W` not a multiple of 40 | 1024, 976, 852, 768, 720, 540, 414 |
+| Character | **Flagship-layout design-consistency failure** — broken at the one width the design was tuned for | **Responsive failure** — clean on desktop, broken on every tablet and phone |
+| Fix | **Tile migration only.** `1920 mod 40 = 0`. | **Tile migration AND period change.** `1920 mod 100 = 20`, so geometry alone is impossible. |
+| Ships in | **PR1** — a pure class swap on an existing layer | **PR2** — atomic with the period, the duration, and the redraw |
+
+**One unverified `W mod period` invariant, failed differently in two places.** This asymmetry is
+load-bearing and was mis-stated in the previous revision of this requirement, which called both
+"a live bug" as if one defect had been seen twice. It has not: the sky is **clean at 1100 px by
+arithmetic luck** and was never checked anywhere else, while the ground is **broken at 1100 px**
+and happens to be clean at 720 px. A single false premise — that `W mod period == 0` holds — was
+asserted for both layers and was wrong for each in a different direction. That is the whole
+argument for defining the seam condition against the pan distance rather than the viewport.
 
 1. **The ground layer seams today, and it is a static artefact, not a flicker.** Period 40 px,
    `w-1/2` tiles in a `w-[200%]` container. At the project's own `max-w-[1100px]` panel width,
@@ -321,10 +469,15 @@ features:
    until the next green light. So the 20 px half-spacing gap is a **fixed mid-panel artefact
    visible for most of play time**, not a transient that flashes past. Fix: migrate to the fixed
    `w-[1920px]` tile, where `1920 mod 40 = 0`.
-2. **The sky layer cannot be fixed by geometry alone.** Its period is 100 px, and
-   `1920 mod 100 = 20`. **The period itself MUST change from 100 px to 128 px**, where
-   `1920 mod 128 = 0`. State this explicitly so nobody attempts a tile-geometry-only fix and
-   concludes the sky cannot be repaired.
+2. **The sky layer is clean today at 1100 px and cannot be fixed by geometry alone.** Its period
+   is 100 px, and `1100 mod 100 = 0` — no seam on desktop, which is why nobody has seen it. But
+   `1920 mod 100 = 20`, so the fixed tile does not repair it either, and at `720 mod 100 = 20`
+   plus 1024, 976, 852, 768, 540 and 414 the current `w-1/2` tile is already broken.
+   **The period itself MUST change from 100 px to 128 px**, where `1920 mod 128 = 0`. State this
+   explicitly so nobody attempts a tile-geometry-only fix and concludes the sky cannot be
+   repaired. The period change and the tile migration are **one atomic change** — see *Background
+   scroll layers* — so the sky fix cannot ship in PR1 without also shipping a 76.8 → 16 px/s
+   speed change, which is a composition change.
 
 **The redundant `backgroundSize` MUST be removed.** `ArcadeBackground.tsx:95` and `:103` set
 `backgroundSize: "1920px 100%"` on the dash tile. On a tile that is already exactly 1920 px wide
@@ -350,15 +503,106 @@ the 1100 px panel, so the seam is off-screen for the whole 10 s cycle instead of
 **Verify:** computed geometry — `1920 mod 100 = 20` proves a geometry-only fix is impossible;
 `1920 mod 128 = 0` proves the new period works. Code read of the sky tile's `backgroundSize`.
 
+### Requirement: The score HUD carries a pixel-panel chip
+
+The score HUD at `App.tsx:465-477` (working tree) sits at `absolute top-6 left-6` **over the new
+bright scene**, inside the sky band, with no dark backing of its own. It is the only one of the
+nine former `text-white` sites whose backing surface this change alters.
+
+**The score HUD MUST be wrapped in the same `pixel-panel` chip the GUI stoplight already uses**
+(`App.tsx:250` is already a `pixel-panel` at `absolute top-6 right-6`, working tree). The chip
+MUST carry a solid `--color-surface` background, not a transparent one, because the scene is
+bright enough to show through.
+
+This requires **no new token** and is symmetric with existing precedent in the same file: the two
+fixed HUD corners of the panel are then the same object.
+
+| Surface behind the HUD | `--color-on-dark` | `#ffffff` |
+|---|---|---|
+| the scene's sky-top `#5ec5f5`, no chip | **1.76:1** ❌ | **1.95:1** ❌ |
+| `--color-surface` `#1a1a2e` on a `.pixel-panel` chip | **15.43:1** ✅ | — |
+
+Both fails are why this is a **layout** requirement and not a token choice: no white available in
+the theme is legible over the bare sky, so the fix has to add a surface, not recolour the text.
+
+#### Scenario: The score is legible over the bright scene
+- **GIVEN** `status === 'playing'` and the scene is rendering
+- **WHEN** the score and combo values are read
+- **THEN** the HUD sits on a `.pixel-panel` chip with a solid `--color-surface` background, and the score value's `--color-on-dark` measures 15.43:1 against that background
+
+#### Scenario: The two HUD corners are the same object
+- **GIVEN** the game panel is in play
+- **WHEN** the top-left HUD and the top-right stoplight render
+- **THEN** both are `.pixel-panel` chips over `--color-surface`
+
+**Verify:** code read of `App.tsx:465-477` (working tree) confirming the `pixel-panel` class and
+a solid `bg-surface`; grep confirming `App.tsx:250` already carries `pixel-panel`. The 15.43:1
+and 1.76:1 figures are a **computed contrast ratio**; no script can judge whether the chip is
+large enough in practice. **Not verifiable in-browser** — a human confirms the score does not
+clip the chip's padding.
+
+### Requirement: Ground tint and road dashes draw from the scene palette
+
+The ground-tint layer and the road-dashes layer are two of the seven canonical scroll layers, so
+their fills are part of the scene's depth read — not decoration. **Both MUST draw from the
+scene palette**, not from the dark-scene tokens they use today:
+
+| Layer | Current fill | Current value | MUST become |
+|-------|--------------|---------------|-------------|
+| Ground tint (`.arcade-scroll-ground`, `ArcadeBackground.tsx:22`) | `--color-track-line` | `rgba(41, 173, 255, 0.04)` | `--color-scene-road` `#3a3a48` |
+| Road dashes (`.arcade-scroll-dashes`, `ArcadeBackground.tsx:25`) | `--color-dash` | `rgba(255, 255, 255, 0.15)` | `--color-scene-road-dashes` `#e8e8f0` |
+
+**Why, in one number each.** The legacy fills are tuned for a near-black panel: composited over
+the new bright scene they measure **1.02:1** (`--color-track-line`) and **1.06:1**
+(`--color-dash`). An animated layer at ~1.04:1 against its own background is **perceptually
+static** — it reads as a frozen stripe rather than as motion, which silently destroys the depth
+illusion this whole change exists to create, and it does so in a way no seam or divisibility
+check would ever catch. The scene-palette replacements measure **9.17:1**
+(`#e8e8f0` over `#3a3a48`), which is legible as travel.
+
+`--color-track-line` and `--color-dash` MUST then be removed from `@theme`; they are the two
+"retired live" tokens in *Visual token discipline*, and they MUST NOT appear anywhere else in
+this change.
+
+#### Scenario: The ground tint is visible motion, not a frozen stripe
+- **GIVEN** the game panel in play over the bright scene
+- **WHEN** the ground-tint layer's fill is resolved
+- **THEN** it is `var(--color-scene-road)` and it is not a ~1:1 overlay on the scene
+
+#### Scenario: The dashes read as travel
+- **GIVEN** the game panel in play over the bright scene
+- **WHEN** the dash layer's fill is resolved
+- **THEN** it is `var(--color-scene-road-dashes)`, which measures 9.17:1 against `--color-scene-road`
+
+**Verify:** code read of `ArcadeBackground.tsx:22` and `:25` (working tree) — both gradient
+strings MUST name scene tokens; plus `Select-String -Path src\index.css -Pattern 'track-line|--color-dash'`
+MUST return 0 after the change, and the **computed contrast ratios** 1.02:1 / 1.06:1 / 9.17:1
+are the recorded evidence. **Not verifiable in-browser** — whether 9.17:1 reads as the intended
+weight of road paint is a human judgement with the app open.
+
 ### Requirement: Layer coverage is bounded and the bound is recorded
 
 At `t = 1` a two-tile container occupies `[-1920, 1920]`. **Any panel wider than 1920 px shows a
 hole.** The panel is capped at `max-w-[1100px]`, so the hole is unreachable today — but the cap
 is a separate decision from the layer geometry, and MUST NOT be silently lifted past 1920 px.
 
-If the cap ever lifts, the fix is to widen the container to four `w-[1920px]` tiles in a
-`w-[7680px]` flex row and pan `-25%` (3840 px = exactly 2 tiles). That keeps both congruence
-conditions true.
+If the cap ever lifts, the fix is to **widen the container to four `w-[1920px]` tiles in a
+`w-[7680px]` flex row, keeping the existing `translateX(-50%)` keyframe unchanged.** The pan
+becomes `3840 px`, which is **exactly 2 tiles**, and `3840` is divisible by every period in the
+table:
+
+```
+3840 / 128 = 30    3840 / 640 = 6      3840 / 240 = 16
+3840 /  40 = 96    3840 /  60 = 64     3840 / 192 = 20     — all six, remainder 0
+coverage: at t=1 a 4-tile container spans [-3840, +3840], so a panel up to 3840 px wide is covered
+```
+
+**The escape hatch therefore needs NO keyframe change at all** — only a wider container and two
+more tiles. `translateX(-50%)` is already the keyframe on every layer; doubling the container
+doubles the pan, and the doubled pan is still period-aligned. A previous revision of this
+requirement said to "pan `-25%`", which is self-inconsistent: `-25%` of a 7680 px container is
+1920 px = **one** tile, and a one-tile pan would not need four tiles at all. That claim is
+withdrawn.
 
 #### Scenario: The two-tile geometry is safe at the current panel cap
 - **GIVEN** the panel is capped at `max-w-[1100px]`
@@ -502,7 +746,12 @@ permitted in the scene.
 | body text | `--color-on-surface` | `#c2c8d0` |
 | muted body | `--color-on-surface-variant` | `#bdc8d1` |
 | primary | `--color-primary` | `#8ed5ff` |
-| sun | `--color-accent-yellow` | `#ffec27` |
+| **sun** | **`--color-accent-yellow`** | **`#ffec27` — currently dead, so RETAINED and not deleted; the sun is its first consumer** |
+
+The sun row is the **only** place `--color-accent-yellow` is named. It is deliberately absent
+from the delete list in *Visual token discipline*, which is where the earlier revision put it and
+where the parenthetical "becomes live as the sun" sat *inside the list that deleted it* — a
+token cannot be both deleted and be the sun.
 
 **New `--color-scene-*` tokens in `@theme`:**
 
@@ -520,7 +769,9 @@ permitted in the scene.
 | road dashes | `#e8e8f0` |
 | car body | `#ffc23a` |
 
-`--color-accent-yellow` is currently dead; the sun is its first consumer.
+Two of these carry live traffic that the earlier revision of this table left pointing at
+dark-scene tokens: `road` and `road dashes` are the fills of the ground-tint and dash layers
+respectively. See *Ground tint and road dashes draw from the scene palette*.
 
 #### Scenario: The scene introduces no colour outside the fixed set
 - **GIVEN** any colour in the new scene layers
@@ -528,8 +779,9 @@ permitted in the scene.
 - **THEN** it is one of the 8 reused tokens or one of the 11 `--color-scene-*` tokens, and no literal hex or `rgba()` appears in `src/**/*.tsx`
 
 **Verify:** grep for hex/`rgba()` (target 0) plus a code read that each scene colour maps to a
-named token. **Not verifiable in-browser:** whether the panel reads as "bright daytime" is a
-human judgement.
+named token — including `ArcadeBackground.tsx:22` and `:25`, whose gradient string literals MUST
+name scene tokens and not retired ones. **Not verifiable in-browser:** whether the panel reads as
+"bright daytime" is a human judgement.
 
 ### Requirement: The scene renders only while playing
 
@@ -769,10 +1021,26 @@ rewrites — would leave the other three divergent, which is the original defect
 verification, and rollback:
 
 - **PR1 — contract compliance and provenance.** Everything that fixes a live violation or a false
-  claim: the hard-shadow contract, the two live seam bugs, the token cleanup, the tracking fix,
-  the car `rx` correction, the dead-token removal, and the deletion of the blur toggle.
-- **PR2 — visual work.** The new scenery layers, the scene palette, the layer order, the
-  question typography, the stoplight lamp, and the answer feedback visuals.
+  claim: the hard-shadow contract, the **ground seam fix only**, the token cleanup, the tracking
+  fix, the car `rx` correction, the dead-token removal, and the deletion of the blur toggle.
+- **PR2 — visual work.** The new scenery layers, the **sky period change together with its tile
+  migration**, the scene palette, the layer order, the question typography, the stoplight lamp,
+  and the answer feedback visuals.
+
+**The two live defects split across the PR boundary, and the split is load-bearing.** The
+**ground** seam is a pure class swap on an existing layer — `w-1/2` → `w-[1920px]`,
+`w-[200%]` → `w-[3840px]`, with no period, no duration, and no speed change — so it is
+reviewable in isolation and **ships in PR1**. The **sky** fix cannot be separated from the sky's
+period change (100 → 128 px) and its duration change (25 → 120 s), because `1920 mod 100 = 20`
+makes geometry alone impossible and `w-1/2` at 1100 px gives `1100 mod 128 = 76` if the period
+lands first. Putting the sky in PR1 would mean PR1 moves a layer from 76.8 px/s to 16 px/s, and
+**PR1's defining property is that it changes no composition.** So the sky ships in **PR2**.
+
+The asymmetry in the other direction is why the split exists: reverting PR1 alone is clean and
+has no layer-geometry consequence, while reverting PR2 after PR1 has landed leaves the ground
+fixed and the sky broken — the invariant half-enforced, and the file reading as though someone
+tried and gave up. Both defects are fixed by the end of the change either way; only the
+sequencing differs.
 
 PR1 is self-contained and reviewable on its own: it changes no layer count and no composition.
 
@@ -820,10 +1088,10 @@ rows previously carried a rationale that was itself the defect.
 | **Question typography** | The question heading MUST use Press Start 2P, to match every other headline | **Reversed.** The question is body prose in Manrope. Rationale from `openspec/design/arcade-retrofit.md:161`. |
 | **Answer feedback** | The three states MUST be distinguished by a shape **or glyph** as well as colour | **Rejected.** No glyph. The differentiators are the 2 px border and the 4 px hard offset. |
 | **Car corner radii** | Every `rx` attribute MUST be removed; no `<rect>` carries `rx` or `ry` | **Corrected, not deleted.** All 8 values MUST be on the 4-unit grid — `rx="0"` or `rx="4"`. |
-| **Edge-line duration** | 1.2 s | **2 s**, giving 960 px/s, the same speed as the rumble strip and the dashes. |
+| **Edge-line duration** | 1.2 s — a figure that has **never shipped**; `src/index.css` carries only 25 s, 10 s and 2 s, so the annotation cited a superseded draft of this delta, not code on disk | **2 s**, giving 960 px/s, the same speed as the rumble strip and the dashes. The `1.2 s` figure is withdrawn outright rather than corrected, because there is no prior value to correct it to. |
 | **Sky duration** | 25 s, on the reading that the sky was scenery that happened to scroll | **120 s.** At 25 s the sky ran at `1920 / 25 = 76.8 px/s` while sitting **behind** hills at `1920 / 60 = 32 px/s` — the backdrop moved `76.8 / 32 = 2.4×` faster than the mid-ground in front of it. A depth-order inversion, and it would have shipped as a visible bug. 120 s puts the sky at 16 px/s, exactly half the hills. |
-| **Tree duration** | 30 s; then 25 s, justified as "matching the sky rung" | **25 s**, on the correct rationale: trees sit strictly between the hills (32 px/s) and the ground tint (192 px/s), so every plane has distinct relative motion. The "matching the sky rung" reasoning was the defect — while the sky ran at 25 s it shared the trees' speed, and pairing two far-plane layers at identical speed is what fused the plane. |
-| **Sky period** | 100 px, with `w-1/2` tiles excused | **128 px.** `1920 mod 100 = 20`, so `w-1/2` is a live bug on sky as well as ground. Coupled atomically to the tile migration: `1100 mod 128 = 76`. |
+| **Tree duration** | 30 s — a figure that has **never shipped**, and which sat in a table annotation citing a superseded draft of this delta rather than code on disk; then 25 s, justified as "matching the sky rung" | **25 s**, on the correct rationale: trees sit strictly between the hills (32 px/s) and the ground tint (192 px/s), so every plane has distinct relative motion. The "matching the sky rung" reasoning was the defect — while the sky ran at 25 s it shared the trees' speed, and pairing two far-plane layers at identical speed is what fused the plane. The `30 s` annotation is deleted, not corrected: nothing ever ran at 30 s. |
+| **Sky period** | 100 px, with `w-1/2` tiles excused on the claim that the sky was "visually continuous at the designed panel width" | **128 px.** `1920 mod 100 = 20` means the fixed tile cannot host a 100 px period, and `1100 mod 128 = 76` means the period cannot land before the migration. Coupled atomically to the tile migration. **Corrected framing:** the sky is **not** a live bug at 1100 px — `1100 mod 100 = 0`, so desktop is clean today and the failure appears at 1024, 976, 852, 768, 720, 540 and 414. The ground *is* a live bug at 1100 px. They are one invariant failing in two places with opposite symptoms, not one bug seen twice. |
 | **Tree count per tile** | 4 trees at `120 / 360 / 600 / 840`, verified by `840 + 120 = 960 < 1920` | **8 trees** at `120 + 240k`, because `1920 / 240 = 8` periods fit. The old verify proved dead space, not off-seam clearance. |
 | **Hills off-seam** | Peaks at `213 / 853 / 1493` are off-seam — no width given | **Same positions, now with a bound:** each peak no wider than 380 px. The off-seam claim was unfalsifiable without a width. |
 | **`w-1/2` justification** | "the pan distance is irrelevant because the pattern repeats forever" | **Withdrawn as false.** `background-position` resolves per element and is never animated, so the tile boundary is a hard phase reset. The mandatory condition is `tile_width ≡ 0 (mod period)`. |
@@ -837,3 +1105,13 @@ The game state machine, the `lightState` timing choreography in the `setTimeout`
 (`App.tsx:116-122`, `:144-150`, `:156-181`), the data layer, and the F1-themed question content
 (open gap 7) and the footer credit (open gap 8). Those are unchanged — the choreography is
 specified in the base spec and this change does not alter a single beat.
+
+> **Pre-existing verify blocker this change does NOT clear.** `openspec/config.yaml` →
+> `rules.verify.audits` carries a FRAMING AUDIT whose **code check returns non-zero today** at
+> `App.tsx:497` (`Desarrollado por el Equipo Foxtrot`) and `App.tsx:499` (`Proyecto Final`) —
+> both rendered in the in-game footer to every player (open gap 8). **It fails identically before
+> and after this change.** `sdd-verify` for this change will therefore FAIL that audit, and that
+> is **expected and pre-existing, not a regression from this work**. Rewriting a credit line is
+> an authorship decision for the team, not an agent's judgement: deleting "Equipo Foxtrot" strips
+> a name from work the team did. Recorded in `state.yaml` → `pre_existing_blockers` so the verify
+> phase does not misread the failure.

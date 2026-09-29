@@ -31,7 +31,7 @@ On **2026-09-26** the store switched to `openspec` and every surviving Engram ar
 
 ## Current state
 
-Branch `new_designs`, HEAD `e26fcf1` ("Document SDD migration and data-layer fixes"). **`main` has received none of this work.**
+Branch `new_designs`, HEAD `453b542` ("Migrate SDD to openspec; add question banks"). **`main` has received none of this work.**
 
 | Arc | Scope | Status |
 |-----|-------|--------|
@@ -39,19 +39,21 @@ Branch `new_designs`, HEAD `e26fcf1` ("Document SDD migration and data-layer fix
 | B | Backend & Data-Layer Rigor — migrations, unified API, hard mode from DB | **Shipped; data layer now verified** — see below |
 | C | Cartoon daytime road scene + dimmed backdrop | **Proposed only — not started** |
 
+Active change, `driving-safety-question-bank`: **`apply` and `verify` are done; `review` and `archive` remain.** It closes gaps 1, 2, 7, 9 and 10, and leaves gap 8 open by design. Nothing from it is committed — `src/App.tsx` is modified and `db/migrations/0002_driving_safety_bank.sql` is untracked. Read `openspec/changes/driving-safety-question-bank/verify-report.md` before touching either; a parallel agent is live in the same repo and `arcade-scene-backdrop` is being edited right now.
+
 Arc B's nine skipped Phase 8 checks have since been executed against the live database. Verified: both endpoints return the unified contract from a live database; migration idempotency under double-apply; a fresh-database bootstrap through a transactional throwaway-schema probe (22/22, three runs, zero residue). One check remains genuinely unverified — hard mode drawing from the DB rather than `db_hard` is confirmed only indirectly, by the returned option order matching the live scrambled primary keys rather than the authored order in `App.tsx`. The `fresh-db-bootstrap` change also fixed a second defect found along the way: seeded answer order was planner-dependent, so a freshly seeded database served a different option order than `db_easy`.
 
 ### Verified project facts
 
 Read `openspec/specs/game/spec.md` and `openspec/specs/data-layer/spec.md` for the full requirement sets. The essentials:
 
-- `src/App.tsx` (484 lines) is a single page with a four-state machine — `menu | mode_selection | playing | game_over` — and one `useEffect` fetcher per mode.
+- `src/App.tsx` (509 lines) is a single page with a four-state machine — `menu | mode_selection | playing | game_over` — and one `useEffect` fetcher per mode.
 - Rendering is pure DOM/CSS plus one inline SVG. No canvas, no `requestAnimationFrame`, no JS animation loop anywhere.
 - `GET /api/questions/:mode` serves both modes from one route, mapping mode → table pair through `MODE_CONFIG` in `server.js:28-41` and grouping JOINed rows via `groupQuestions()` in `server.js:46-72`.
-- Both modes keep a 5-question hardcoded fallback in `App.tsx` so the game is playable with the backend down. This is deliberate, documented behavior.
-- The live `easy_*` tables hold **7** questions against the 5 in the repo — two are `Test` / `Second Test` smoke-test residue, and `Test` is served to players. See gap 1.
+- **Both modes now fall back to a real offline bank, not five inline questions.** `src/data/questions.easy.ts` (30) and `src/data/questions.hard.ts` (80) are imported at `src/App.tsx:14-15` and aliased to the historical `db_easy` / `db_hard` names, so the game stays playable with the backend down. The old inline 5-question F1 arrays are gone.
+- **The live and offline banks are now 30 easy / 80 hard, with matching option order.** Verified 2026-09-28 against Neon: 30/120/80/320 rows, no smoke-test residue, and the first four easy questions return their correct option at index 1, 2, 3, 3 — identical to the TS bank. Gaps 1, 2, 7 and 10 are closed; see each entry.
 - All sixteen live columns are lowercase. The old `neondb_guide.txt` snippet's quoted CamelCase form was never executed.
-- **There is no test runner.** No test script, no test dependency, no config. Verification is `npx tsc --noEmit`, grep audits, contrast/geometry math written into the artifacts, and — for the data layer — a transactional throwaway-schema probe. Do not plan work that assumes a test suite exists.
+- **There is no test runner.** No test script, no test dependency, no config. Verification is `npx tsc --noEmit`, grep audits, contrast/geometry math written into the artifacts, ad-hoc draw simulations, and — for the data layer — a transactional throwaway-schema probe. Do not plan work that assumes a test suite exists.
 
 ### Operating rules
 
@@ -67,35 +69,63 @@ Read `openspec/specs/game/spec.md` and `openspec/specs/data-layer/spec.md` for t
 
 These are the real outstanding items. Everything else is done.
 
-### 1. Live `easy_*` tables contain smoke-test rows — HIGH
+**Closed gaps are kept in place, not deleted**, with the original finding and the evidence that closed it
+preserved underneath. Gaps 1, 2, 7, 9 and 10 were closed by `driving-safety-question-bank` on
+2026-09-28 and are now historical record. They are retained because the *reason each was a gap* is the
+useful part — a future reader who re-derives one of these should not have to re-derive it from scratch.
+Entries that remain genuinely open are 3 (resolved), 4, 5, 6, and **8**, which is now the
+highest-priority open item.
 
-The live database has two rows in `easy_questions` that are development residue:
+### 1. Live `easy_*` tables contain smoke-test rows — **RESOLVED 2026-09-28**
+
+Closed by the `driving-safety-question-bank` change, together with gap 7 — one destructive migration,
+one approved scope, rather than two migrations against the same four tables.
+
+Both rows and their answers are gone. Live `easy_questions` now holds **30** rows, zero of them
+smoke-test residue, and `photostring` is null on every row. The 42,420-byte photo on the `Test` row
+was **not snapshotted before deletion and is unrecoverable**; the F1 question text is recoverable
+from git. That omission is recorded in the change's `verify-report.md` §6 and in `tasks.md` 1-2,
+which are deliberately left unticked.
+
+The original table, kept so the reason this was ever a gap survives:
 
 | id | question | answers | note |
 |----|----------|---------|------|
-| 1 | `Test` | 4 (`prueba exitosa` correct, 3× `prueba fallida`) | **served to players**, plus a 42,420-byte base64 photo |
-| 2 | `Second Test` | 0 | invisible — the `INNER JOIN` filters it |
+| 1 | `Test` | 4 (`prueba exitosa` correct, 3× `prueba fallida`) | **was served to players**, plus a 42,420-byte base64 photo |
+| 2 | `Second Test` | 0 | invisible — the `INNER JOIN` filtered it |
 
-`Test` is returned by `GET /api/questions/easy`, so a player has a **1-in-6 chance** of drawing a nonsense question with a random image. Easy mode serves 6 questions where the repo models 5.
+### 2. Live answer primary keys are interleaved, so online and offline option order differ — **RESOLVED 2026-09-28**
 
-`Second Test` is harmless today precisely because it has no answers, which is a fragile thing to rely on — a single answer row would make it visible with an empty or `-1` option set.
+**The defect is gone, but note *why* — this gap did not close on its own merits.** The correct answer no
+longer moves between the two sources: `0002` rewrote the live answer primary keys under the pinned
+`ORDER BY v.ord` order, so the served order is now the authored order. Verified 2026-09-28 by reading
+`array_agg(answer ORDER BY ideasyanswer)` for the first four easy questions and getting the correct
+option at index **1, 2, 3, 3** — identical to `src/data/questions.easy.ts`.
 
-**Fix:** delete both rows and their answers. That is production data deletion, so it needs explicit sign-off rather than an agent's judgement. Until then, note that `db_easy` in `src/App.tsx` and the live easy table disagree on question count.
+The *fix* already existed before this change. What this change did was finally **run** it against the
+database that had the defect, which is exactly what gap 10 was about. `fresh-db-bootstrap` had pinned
+the seed order on 2026-09-26, but the `WHERE NOT EXISTS` guard meant it could never apply to a
+database that already had the questions. So gaps 2 and 10 were always one problem wearing two
+descriptions, and the destructive migration is what resolved both.
 
-### 2. Live answer primary keys are interleaved, so online and offline option order differ — MEDIUM
+The original finding, kept for the record:
 
-Because the live `easy_answers` primary keys are scattered across questions, the live easy option order differs from `db_easy` for **every** question. Each response is internally consistent and the correct answer is always identified, so the game is never wrong — but the online and offline experience of one question are not the same, which undercuts the offline fallback's role as a mirror.
+Because the live `easy_answers` primary keys were scattered across questions, the live easy option
+order differed from `db_easy` for **every** question. Each response was internally consistent and the
+correct answer was always identified, so the game was never wrong — but the online and offline
+experience of one question were not the same, which undercut the offline fallback's role as a mirror.
 
-**This is not cosmetic. The correct answer MOVES between the two sources.** Verified by direct query on 2026-09-28, comparing the same question served by `GET /api/questions/:mode` against the same question in the `db_easy` / `db_hard` fallback array in `src/App.tsx`:
+**This was not cosmetic. The correct answer MOVED between the two sources.** Verified by direct query on
+2026-09-28, comparing the same question served by `GET /api/questions/:mode` against the same question
+in the `db_easy` / `db_hard` fallback array in `src/App.tsx`:
 
 | Bank | Question | Correct option index online | Correct option index in the fallback | Delta |
 |------|----------|-----------------------------|--------------------------------------|-------|
 | easy | (same question, both sources) | **1** | **0** | 1 position |
 | hard | (same question, both sources) | **3** | **1** | 2 positions |
 
-Both responses are individually correct — `options[answer]` resolves to the right string in each — so scoring is never wrong. What is wrong is that a player who learns the offline layout, or who answers the same question twice across a backend restart, has to re-learn which *position* is right rather than recalling which *fact* is right. It is also a prerequisite for the `arcade-scene-backdrop` answer-feedback work, which must key off the resolved `answer` index and therefore cannot assume the authored order.
-
-The `fresh-db-bootstrap` change fixed this for *freshly seeded* databases by pinning seed order. Reordering existing rows needs a destructive migration (rewrite PKs, or add a display-ordinal column) — a separate, explicitly-approved change. See also gap 10, which records that the live instance was seeded *before* that fix and never converged.
+The `arcade-scene-backdrop` answer-feedback work is unblocked: it can key off the resolved `answer`
+index and assume the authored order, because the two sources now agree.
 
 ### 3. `neondb_guide.txt` documented the wrong schema — **RESOLVED 2026-09-28**
 
@@ -130,21 +160,42 @@ Still open, none blocking:
 | — | `CarSprite.tsx:119` (`.car-aura`) lacks `motion-reduce:animate-none`, so the reduced-motion rule's "both places" requirement is unsatisfiable as written — the `prefers-reduced-motion` block at `index.css:127-134` *does* cover it with `animation: none !important`, so behavior is correct; only the documented pattern is wrong. Found 2026-09-28. |
 | — | `bg-slate-900/20` on the ground layer could be promoted to a token |
 
-### 7. The seeded question bank is Formula 1-themed, contradicting the Purpose requirement — **MEDIUM, new**
+### 7. The seeded question bank is Formula 1-themed, contradicting the Purpose requirement — **RESOLVED 2026-09-28**
 
-Found 2026-09-28 while migrating the context files. The product brief is a **driving-safety** game — that is now a requirement (*The game is a driving-safety quiz for high-school students*, `openspec/specs/game/spec.md`). The shipped data does not match it.
+Closed by the `driving-safety-question-bank` change. The bank is now driving-safety content on both
+sides: `src/data/questions.easy.ts` (30) and `src/data/questions.hard.ts` (80) replace the inline F1
+arrays, and `db/migrations/0002_driving_safety_bank.sql` replaces the live rows. An F1-residue audit over
+`db/**` and `src/**` returns **0 rows**.
+
+The 110 hard questions are cited to a real source extraction — the GCBA *Manual del conductor*,
+200 pages — with a printed page reference per question, and the speed limits are cited to Ley 24.449
+art. 51 instead, because the manual's speed table is a graphic the text layer does not expose. The
+extraction is documented in the change's `state.yaml`, including two traps that cost real time: the text
+layer carries **no accents**, so any literal search silently returns zero, and PDF page index is offset
+by one from the printed page. One source was also corrected against itself — the manual specifies a
+**two**-second safe following distance, where a commercial study site claims one.
+
+The original finding, kept for the record:
+
+Found 2026-09-28 while migrating the context files. The product brief is a **driving-safety** game — that
+is now a requirement (*The game is a driving-safety quiz for high-school students*,
+`openspec/specs/game/spec.md`). The shipped data did not match it.
 
 | Where | Offending content |
 |-------|------------------|
 | `db/migrations/0001_bootstrap.sql:86-99` (easy seed) | `¿Cuántos pilotos hay en un auto de F1?`; flags framed as racing flags (`Entrada a pits`, `Carrera terminada`) |
 | `db/migrations/0001_bootstrap.sql:135-148` (hard seed) | `¿Cuál es el límite de velocidad en el Pit Lane?`, `DRS` / `ERS` / `KERS`, `¿Cuántos puntos recibe el ganador de un GP?`, tyre compounds `C1`–`C5` |
-| `src/App.tsx:23-30` (`db_easy`) | same as the easy seed |
-| `src/App.tsx:31-38` (`db_hard`) | same as the hard seed |
-| live `easy_*` tables | 2 smoke-test rows on top of that (gaps 1) |
+| `src/App.tsx:23-30` (old `db_easy`) | same as the easy seed |
+| `src/App.tsx:31-38` (old `db_hard`) | same as the hard seed |
 
-`db/migrations/0001_bootstrap.sql` states the seed is "transcribed verbatim from the `db_easy` / `db_hard` arrays" — so a content change must land in **both** the SQL seed and the `App.tsx` fallback, or the online and offline banks diverge again (the exact failure `fresh-db-bootstrap` fixed for *order*; this would be *content*).
+`db/migrations/0001_bootstrap.sql` states the seed is "transcribed verbatim from the `db_easy` /
+`db_hard` arrays" — so a content change had to land in **both** the SQL and the fallback, or the banks
+would diverge again.
 
-**Not an agent's call.** Rewriting a question bank is a content decision, and the easy mode also has production rows live that nobody has signed off on deleting (gap 1). It needs a new SDD change, and probably a decision on whether gap 1 is folded into it.
+**`0001_bootstrap.sql` still contains all of the above, and that is deliberate.** It is immutable
+history, and its `WHERE NOT EXISTS` guard on question *text* means editing it would have inserted the new
+bank *alongside* the old — landing at 10 easy questions, 5 of them still F1. Any audit that reads
+`0001` as a live-content failure is misreading it; the live content is `0002`.
 
 ### 8. The in-game footer still credits the university team — **BLOCKER, new**
 
@@ -161,48 +212,102 @@ This directly violates *The game is a driving-safety quiz for high-school studen
 
 **Why it survived.** The first version of the framing audit in `openspec/config.yaml` grepped only `universit|Team Foxtrot|Formula 1|Grand Prix`. The code says `Equipo Foxtrot` and `Proyecto Final` — Spanish, and never the English strings. The audit passed clean against a live violation. The audit pattern is now fixed to include `universidad|Equipo Foxtrot|Proyecto Final`; that fix is in this change.
 
-**Not an agent's call — attribution.** Rewriting a credit line is not a copy decision, it is someone's authorship. Deleting "Equipo Foxtrot" strips a name from work the team did; that is not mine to remove unprompted. The options are roughly: keep the name and drop only `Proyecto Final`; keep both and add the driving-safety framing; or replace with a school/instructor credit. **Needs a human decision from the team**, then a one-line change in `src/App.tsx`.
+**Not an agent's call — attribution.** Rewriting a credit line is not a copy decision, it is someone's
+authorship. Deleting "Equipo Foxtrot" strips a name from work the team did; that is not mine to remove
+unprompted. The options are roughly: keep the name and drop only `Proyecto Final`; keep both and add the
+driving-safety framing; or replace with a school/instructor credit. **Needs a human decision from the
+team**, then a one-line change in `src/App.tsx`.
 
-### 9. Questions are drawn with replacement and options are never reshuffled — MEDIUM, new
+**Still open as of 2026-09-28, and explicitly a non-goal of `driving-safety-question-bank`.** That change
+closed the five content gaps around it but left this one untouched: the footer is an authorship decision
+rather than a content one, and it lives in JSX. It is now the **highest-priority open gap** — the only
+player-facing Purpose violation left in the project.
 
-Found 2026-09-28 while scoping the `driving-safety-question-bank` change. The entire draw is two lines, `src/App.tsx:100-101`:
+**Related tooling defect, still open.** `rules.verify.audits` in `openspec/config.yaml` is file-level
+and its allowlist does not include `openspec/changes/**`. A change folder therefore cannot quote the
+strings it exists to correct, so a gap-closing change cannot document what it removed without tripping
+the audit. Worked around by referring to gaps by number and describing the offending literals rather than
+quoting them. Two options, undecided: add `openspec/changes/**` with a correction-note reading rule, or
+accept the constraint and document gaps by number only. Recorded in the change's `state.yaml` under
+`tracked_gaps`.
+
+### 9. Questions are drawn with replacement and options are never reshuffled — **RESOLVED 2026-09-28**
+
+All three defects are fixed. `getNewQuestion` in `src/App.tsx:99-113` now:
+
+- **shuffles** `options` with a Fisher–Yates pass and **remaps** `answer` by capturing the correct
+  option's *text* before the swap and re-resolving its index after. Without the remap every correct
+  answer would be scored wrong, and `tsc` cannot see that.
+- **draws without replacement** until the bank is exhausted, tracked in an `askedIds` ref, and
+  **excludes `lastId` at the lap seam** where `askedIds` is reset. This last guard is a bug fix, not a
+  spec item: the first version shipped with a measured **2 immediate repeats in 4,000 easy draws**,
+  which review missed and simulation caught. After the fix, 0 repeats in 30,000 draws per bank.
+
+Bank size is no longer 5: 30 easy, 80 hard, from the files and from the live tables.
+
+**The shipped rule is stronger than the one this gap and the change's `tasks.md` step 13 specify** —
+they ask only that the *previously drawn* question be excluded. The stronger rule (full depletion plus
+the seam guard) is what actually prevents repeats. `design.md` and the game delta spec still carry the
+weaker wording and **must be updated before archive**.
+
+The original finding, kept for the record:
+
+Found 2026-09-28 while scoping the `driving-safety-question-bank` change. The entire draw was two lines,
+`src/App.tsx:100-101`:
 
 ```ts
 const randomIndex = Math.floor(Math.random() * db.length);
 setCurrentQuestion(db[randomIndex]);
 ```
 
-Three defects in those two lines.
+| Defect | What actually happened | Why it mattered |
+|--------|------------------------|-----------------|
+| **Draw with replacement** | `Math.random()` indexed the whole bank; nothing recorded what was drawn last | The same question could come up twice in a row. Back-to-back repeats read as a bug to the player. |
+| **Option order never reshuffled** | `options` and `answer` passed through exactly as received | The correct answer sat at a fixed index for every question, in both sources. A player learned a *position*, not a *fact*. See gap 2. |
+| **The bank was 5 questions** | 5 easy, 5 hard | 5 questions × 4 fixed option positions is 20 stable slots, memorisable in one sitting. |
 
-| Defect | What actually happens | Why it matters |
-|--------|----------------------|----------------|
-| **Draw with replacement** | `Math.random()` indexes the whole bank; nothing records what was drawn last | The same question can come up twice in a row. Back-to-back repeats read as a bug to the player, even though the mechanism is a plain uniform draw. |
-| **Option order is never reshuffled** | `options` and `answer` are passed through exactly as received, from either the live bank or the fallback | The correct answer sits at a fixed index for every question, in both sources. A player learns a *position*, not a *fact*. See gap 2 — the index is not even the same in the two sources. |
-| **The bank is 5 questions** | 5 easy, 5 hard today | 5 questions × 4 fixed option positions is 20 stable slots. It is memorisable in a single sitting, and once memorised the game tests recall of its own layout rather than of road-safety knowledge. |
+### 10. The live database was seeded before the ordering fix and never converged — **RESOLVED 2026-09-28**
 
-Draw-with-replacement is a defensible design in a game that ends when lives run out. It stops being defensible when the bank *is* the content: with five questions the repetition is visible as repetition, not absorbed as difficulty.
+Closed by running the fix, which was always the whole point. `db/migrations/0002_driving_safety_bank.sql`
+deleted the four game tables' rows and re-inserted them under the pinned `ORDER BY v.ord` order, so a
+freshly seeded database and the live one now converge on identical content. Applied against Neon on
+2026-09-28 with an approved, exactly-enumerated deletion scope; `0001_bootstrap.sql` was left unedited,
+since its text guard appends rather than replaces.
 
-**Fix:** reshuffle `options` on every draw and remap `answer` to follow the correct option; track the previously drawn question and exclude it from the next draw when the bank holds more than one entry. Client-side, in `getNewQuestion`. Specified in `openspec/changes/driving-safety-question-bank/specs/game/spec.md`.
+**The live instance is now verified against the requirement it used to fail** — that was the open
+question in the original entry, since the `fresh-db-bootstrap` probe only ever exercised the
+empty-database path. Live: 30 / 120 / 80 / 320 rows, zero questions without exactly 4 answers or
+exactly one correct, zero F1 rows, `photostring` null throughout, and
+`easy_questions_ideasyquestion_seq.last_value = 30` so the sequence restarted rather than appended.
 
-### 10. The live database was seeded before the ordering fix and never converged — MEDIUM, new
+Two verification notes worth keeping. The report that `0002` inserted "a max of 50 rows per table" was
+**wrong** — `db/apply.js:38` sends each file in a single `pool.query` with no chunking, and the explicit
+`BEGIN`/`COMMIT` means a failed run can only leave 0 rows or all 550, so the reported 50/50/50/30 state
+was impossible. It was a Neon console page boundary. And the throwaway-schema and fault-injection checks
+for `0002` were **not** run — there is no local Postgres, `psql`, or Docker here — so `0002` has been
+executed exactly once, against production. The live double-apply idempotency check is also unrun. All
+three are recorded in the change's `verify-report.md` §6 and left unticked in `tasks.md`.
 
-Found 2026-09-28 while scoping `driving-safety-question-bank`. All four seed inserts in `db/migrations/0001_bootstrap.sql` end with `ORDER BY v.ord` — lines `81`, `112`, `130`, `161`. That pin was added by `fresh-db-bootstrap` on 2026-09-26.
+The original finding, kept for the record:
 
-**The live Neon database was seeded by the pre-fix version of the file, and the fix was never re-applied to it.** It cannot be, not by re-running: the seed inserts are guarded by `WHERE NOT EXISTS (SELECT 1 FROM easy_questions e WHERE e.question = v.question)` — a guard on question **text** — so on a database that already has the questions the corrected file inserts nothing and the scrambled primary keys stay scrambled.
+All four seed inserts in `db/migrations/0001_bootstrap.sql` end with `ORDER BY v.ord` — lines `81`,
+`112`, `130`, `161`. That pin was added by `fresh-db-bootstrap` on 2026-09-26.
 
-| | Freshly seeded database | Live Neon database |
+**The live Neon database was seeded by the pre-fix version of the file, and the fix could never be
+re-applied to it.** The seed inserts are guarded by `WHERE NOT EXISTS (SELECT 1 FROM easy_questions e
+WHERE e.question = v.question)` — a guard on question **text** — so on a database that already had the
+questions the corrected file inserts nothing and the scrambled primary keys stay scrambled.
+
+| | Freshly seeded database | Live Neon database (before `0002`) |
 |---|---|---|
 | Seeded by | corrected `0001`, `ORDER BY v.ord` present | pre-fix `0001`, `nextval()` order was planner-dependent |
-| `easy_questions` id order | matches the seed's `ord` | **does not match** the seed's `ord` |
-| Effective option order | matches `db_easy` | differs from `db_easy` for every question (gap 2) |
+| `easy_questions` id order | matches the seed's `ord` | **did not match** the seed's `ord` |
+| Effective option order | matches `db_easy` | differed from `db_easy` for every question (gap 2) |
 
-The consequence is that the *Seeded option order is deterministic and matches the offline fallback* requirement in `openspec/specs/data-layer/spec.md` is satisfied **only for a fresh namespace**. It was verified that way — the transactional throwaway-schema probe creates a schema and runs the file into it, so by construction it is the empty-database path. The live instance was never brought into line, and that requirement's *Then its `options` array and `answer` index match `db_easy`* scenario does not hold against Neon.
+This was the root cause of gap 2, and a different problem from it. Gap 2 was the *defect*; gap 10 was
+that the *fix for it was never run against the database that had the defect*.
 
-This is the root cause of gap 2, and it is a different problem from it. Gap 2 is the *defect* — interleaved answer primary keys. Gap 10 is that the *fix for it was never run against the database that has the defect*.
-
-**Fix:** a new `0002` migration that deletes the game's rows and re-inserts them under the pinned order, so a fresh database and the live database converge on identical content. Not editing `0001` — see the rationale in `openspec/changes/driving-safety-question-bank/design.md`. The delete is production data deletion, and the maintainer's explicit approval of that deletion is recorded — with the exact enumerated scope — in that change's `design.md`. It covers writing the migration; **running it against live Neon is a second, separate gate** and is task 17 in that change's `tasks.md`. Note that gap 1 below is folded into the same migration rather than deferred, because a separate change for two rows would mean applying two destructive migrations to the same four tables.
-
-### 11. The database also hosts `neon_auth`, which this project does not own — **BOUNDARY, new**
+### 11. The database also hosts `neon_auth`, which this project does not own — **BOUNDARY, standing**
 
 Found 2026-09-28 by direct query. The connection in `DATABASE_URL` is not a game-only database. It holds two schemas:
 
@@ -221,6 +326,17 @@ Found 2026-09-28 by direct query. The connection in `DATABASE_URL` is not a game
 - **`DROP SCHEMA public CASCADE` has never been run here and must never be.** It would take the four game tables with it and leave `neon_auth` orphaned, because Neon's auth service expects to own this database. It is also exactly the command that appears in a casual "reset the dev database" instruction and gets pasted without the second thought it deserves.
 
 **Fix:** no code change — the runner and the SQL are left alone. The boundary is now stated as a requirement in `openspec/specs/data-layer/spec.md`, with the `DROP SCHEMA public CASCADE` prohibition made explicit so a future reader meets it as a rule rather than as trivia. Anyone touching the data layer needs to know this is a shared database, not a scratch one.
+
+**This does not "close" — it is a standing constraint**, and it is deliberately not listed among the
+gaps closed by `driving-safety-question-bank`. Two things were checked on 2026-09-28 and one of them is
+only half-proved:
+
+- `0002` names no `neon_auth` object and contains no `DROP` of any kind, so it **cannot** have touched
+  those 9 tables. That is a statement about the file's contents, and it holds.
+- The **strong** form — that the 9 tables' row counts are unchanged — was **not** verified. No
+  before/after snapshot was taken (`tasks.md` 16 and 19, left unticked), because the apply ran without
+  one. A reviewer should treat `neon_auth` as *probably* untouched rather than *proven* untouched, and
+  snapshot it before the next data-layer change.
 
 ## Migrated artifacts
 
@@ -257,7 +373,14 @@ Arc A's design was never a separate artifact — it was written straight to the 
 
 ## Next change: `arcade-scene-backdrop`
 
-Proposed, not started. Read `openspec/changes/arcade-scene-backdrop/exploration.md` and `proposal.md`.
+**Before starting it, `driving-safety-question-bank` should clear `review` and `archive`.** Its
+`apply` and `verify` are done and the evidence is in
+`openspec/changes/driving-safety-question-bank/verify-report.md`, but nothing is committed and six
+planned checks were never run (`verify-report.md` §6). `arcade-scene-backdrop` is now unblocked on one
+of its dependencies — it can assume the authored option order, because gaps 2 and 10 are closed — but
+stacking an uncommitted change under an unreviewed one is how fences get crossed.
+
+Read `openspec/changes/arcade-scene-backdrop/exploration.md` and `proposal.md`.
 
 Replace the abstract in-game gradient background with a daytime cartoon pixel landscape — sky, sun, clouds, far hills, trees, road with rumble strips — and render a dimmed copy of the same scene as the out-of-game page backdrop.
 

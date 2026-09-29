@@ -3,7 +3,9 @@
 **Change:** `driving-safety-question-bank`
 **Domain:** `game`
 **Base spec:** `openspec/specs/game/spec.md`
-**Status:** spec written — `design.md` and `tasks.md` written; nothing implemented
+**Status:** implemented and verified 2026-09-28. This delta now **describes what shipped**, not what was
+planned — two requirements were strengthened during apply and their `Verify` sections corrected. See
+`verify-report.md` §7. **Not yet archived.**
 **Closes:** open gap 9 (the draw and the shuffle)
 
 > **Scope fence.** This delta covers the draw in `getNewQuestion` and the relocation of the
@@ -89,35 +91,53 @@ or even a partially-ordered result. A Fisher-Yates pass over a copy is the corre
 - **When** each is drawn
 - **Then** the same remap rule applies to both, and neither preserves the authored order
 
-**Verify:** code read of the remap. **The invariant is not provable by reading and there is no test
-runner in this repo** — there is no harness in which to draw a question 1000 times and assert the
-correct text is stable. Verification is therefore: (1) code read confirming the permutation and the
-`indexOf` remap, and (2) a manual pass in the browser, drawing several questions and confirming the
-marked-correct option is the right one **every** time. Flagged as requiring a human with the app
-open rather than asserted as passing. If this is wrong the game is unwinnable, so the manual pass is
-not optional.
+**Verify:** code read of the remap. **Revised after apply:** the original version of this section
+claimed the invariant was not automatable because the repo has no test runner, and prescribed a manual
+pass in the browser. That was wrong, and worth correcting rather than deleting — the remap is a pure
+function of a question record and a permutation, so a headless harness over the same arrays settles it.
+A 30,000-draw simulation per bank confirms the marked option is correct **every** time, that the
+shuffled options are a true permutation of the authored set, and that the correct answer lands in all
+four positions. The manual browser pass is still wanted — it catches what a data-level check cannot,
+namely whether the rendered highlight is the one the remap produced — but it is corroboration now, not
+the only evidence.
 
-### Requirement: A question is not repeated back to back
+### Requirement: Questions are drawn without replacement within a lap, and never back to back across the lap seam
 
-`getNewQuestion` SHALL NOT draw the same question as the previous draw when the bank holds more
-than one entry. The previous question's identity SHALL be tracked and excluded from the candidate
-set.
+> **Strengthened during apply, 2026-09-28.** This requirement originally read "a question is not
+> repeated back to back" and asked only for the previous question to be excluded. What shipped is
+> stronger, and **the weaker version contains a real defect**: tracking only the last question permits
+> an immediate repeat at the moment a lap wraps. Both forms are specified below, because the weaker one
+> is the trap and the stronger one is not obvious from it.
 
-The exclusion is **soft**: when the bank holds a single entry, or when exclusion leaves no
-candidates, the draw falls back to the full bank rather than returning nothing. Returning nothing
-would strand the player in `playing` with no question on screen and no way out — a worse failure
-than a repeat, and one the 1-question edge case makes reachable.
+Within a lap, `getNewQuestion` SHALL draw **without replacement** from the questions not yet served in
+the current lap. When the bank is exhausted, the served set SHALL be reset and a new lap SHALL begin.
 
-**Redraw scope.** The tracked question MUST be cleared when a run starts (`startGame`) and when the
-player returns to the menu. A question excluded from the *previous run's* last draw is not
-"recent" in any sense the player would recognise, and carrying it across a mode change would make
-the first question of a new run depend on how the last run ended.
+**Across the lap seam, the last question of the closing lap SHALL be excluded from the opening draw of
+the next.** This is a separate state from the served set, because the served set is reset at exactly
+the moment the exclusion is needed. A single `askedIds` array cannot express both: clearing it at lap
+exhaustion is what creates the seam. Implementations MUST keep the previous question's identity across
+that reset, or the seam will repeat.
 
-This is a **no-repeat-immediately** rule, not a no-repeat-per-run rule. A full shuffle bag — every
-question exactly once before any repeats — is a better fit for a 110-question bank and is
-explicitly **not** adopted here: it needs per-mode mutable state that outlives a draw, it interacts
-with the fetch effects that replace a bank mid-session, and a game that ends when lives run out
-almost never sees a question twice. If the bank grows, revisit it.
+Every exclusion MUST be guarded on the bank holding more than one entry.
+
+**The exclusion is soft.** When the bank holds a single entry, or when exclusion leaves no candidates,
+the draw falls back to the full bank rather than returning nothing. Returning nothing would strand the
+player in `playing` with no question on screen and no way out — a worse failure than a repeat, and one
+the 1-question edge case makes reachable.
+
+**Exclusion MUST key on the bank's own index, not an index relative to the candidate pool.** The pool
+is produced by filtering the bank, so pool-relative indices shift as the pool shrinks; a pool-relative
+key silently stops excluding anything as the lap progresses.
+
+**Redraw scope.** Both the served set and the carried previous-question identity MUST be cleared when
+a run starts (`startGame`) and when the player returns to the menu. A question excluded from the
+*previous run's* last draw is not "recent" in any sense the player would recognise, and carrying it
+across a mode change would make the first question of a new run depend on how the last run ended.
+
+This remains **not** a full shuffle bag in the sense of never repeating within a run — a run that ends
+when lives run out may cross the lap boundary more than once. A shuffle bag is a better fit if the bank
+grows substantially; it is explicitly still not adopted, for the reasons in `design.md` §9. The
+guarantee here is: **no question repeats within a lap, and none repeats immediately across a seam.**
 
 #### Scenario: Two consecutive draws are different questions
 
@@ -125,17 +145,31 @@ almost never sees a question twice. If the bank grows, revisit it.
 - **When** two draws happen in a row
 - **Then** the two questions differ
 
+#### Scenario: A lap serves the whole bank before repeating
+
+- **Given** an easy bank of 30 questions
+- **When** 30 draws happen
+- **Then** all 30 distinct questions have been served
+
+#### Scenario: The seam does not repeat
+
+- **Given** an easy bank of 30 questions
+- **When** 31 consecutive draws happen
+- **Then** question 31 differs from question 30
+
 #### Scenario: A single-question bank still draws
 
 - **Given** a bank containing exactly one question
 - **When** a draw happens
 - **Then** that question is returned, and the game is not stranded without a question
 
-**Verify:** code read of the exclusion branch and the `startGame` reset. The two-scenario behaviour
-is not automatable here — no test runner, and the draw is a pure function of `Math.random()` inside
-a React callback. A manual pass over several consecutive draws in the browser is the check; the
-1-question edge case is not reachable in the shipped build (30 and ~80 entries) and is a
-guard-against-crash assertion rather than a product behaviour.
+**Verify:** simulation, 30,000 draws per bank, asserting all four scenarios. **This section originally
+prescribed a manual browser pass and claimed the behaviour was not automatable** — it is, being a pure
+function of the bank arrays and a `Math.random()` sequence, and it is the check that matters: the first
+implementation passed code review and still produced 2 immediate repeats in 4,000 easy draws, which a
+manual pass over "several consecutive draws" would most likely have missed. The 1-question edge case is
+a guard-against-crash assertion and is not reachable in the shipped build (30 and 80 entries), so it is
+covered by the `db.length > 1` guard rather than by a live bank.
 
 ### Requirement: The question data lives outside the component
 
@@ -144,10 +178,10 @@ exporting a typed array using the `Question` interface declared in `src/App.tsx`
 declared inline in the component.
 
 This is a **collation requirement**, not a style preference. A data migration and a visual redesign
-are running concurrently against `src/App.tsx`; the migration must own lines 23-38 and the draw
-logic and nothing else. Putting the content in its own module is what makes that fence hold — a
-110-question diff inside a 484-line component is a diff no reviewer can read alongside a visual diff
-of the same file.
+are running concurrently against `src/App.tsx`; the migration must own the import block, the deleted
+banks, the draw function, and the `startGame` reset, and nothing else. Putting the content in its own
+module is what makes that fence hold — a 110-question diff inside a 500-line component is a diff no
+reviewer can read alongside a visual diff of the same file.
 
 Types MUST be explicit. The `Question` interface is the existing contract (`question`, `options`,
 `answer`, `photoString`), and a mistyped `answer` index in 110 hand-authored entries is a runtime
@@ -158,7 +192,12 @@ type-checked at every literal.
 
 - **Given** `src/App.tsx`
 - **When** it is searched for inline question arrays
-- **Then** no `Question[]` literal remains in the file; both banks are imported from `@/data/`
+- **Then** no `Question[]` literal remains in the file; both banks are imported from `./data/`
+
+**Corrected after apply:** this scenario originally said the banks are imported from `@/data/`. **There is
+no `@/*` path alias in this repo** — no alias in `tsconfig.json` or `vite.config.ts`, and no
+`tsconfig.app.json` exists at all. The imports are relative, at `src/App.tsx:14-15`. The scenario is
+restated rather than deleted because the wrong path is the sort of thing a reader trusts.
 
 **Verify:** `npx tsc --noEmit` for the type check; grep for `const db_easy` / `const db_hard` in
 `src/App.tsx` returning zero matches; `git diff --stat src/App.tsx` showing only the import block,

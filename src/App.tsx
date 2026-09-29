@@ -5,9 +5,14 @@
 
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Gamepad2, ShieldCheck, ChevronLeft, Trophy, Flag, AlertTriangle } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import ArcadeBackground from "./components/ArcadeBackground";
 import CarSprite from "./components/CarSprite";
+// Offline fallback banks. The online database is the primary source; these keep
+// the game playable when the API is down. The same bank backs both paths, so the
+// option order a player memorises online is not the order they see offline.
+import db_easy from "./data/questions.easy";
+import db_hard from "./data/questions.hard";
 
 type GameStatus = 'menu' | 'mode_selection' | 'playing' | 'game_over';
 
@@ -20,22 +25,6 @@ interface Question {
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
-const db_easy: Question[] = [
-  { question: "¿Qué significa la bandera roja?", options: ["Peligro, detener carrera", "Última vuelta", "Entrada a pits", "Carrera terminada"], answer: 0 },
-  { question: "¿Cuál es el color de la bandera de salida?", options: ["Roja", "Verde", "Cuadros", "Amarilla"], answer: 1 },
-  { question: "¿Qué debe hacer un piloto ante bandera amarilla?", options: ["Acelerando", "Reducir velocidad y no rebasar", "Ir a pits", "Detener el auto inmediatamente"], answer: 1 },
-  { question: "¿Dónde se detienen los autos para cambiar llantas?", options: ["En la pista", "En el garaje", "En los pits", "En la meta"], answer: 2 },
-  { question: "¿Cuántos pilotos hay en un auto de F1?", options: ["Dos", "Uno", "Cuatro", "Tres"], answer: 1 },
-];
-
-const db_hard: Question[] = [
-  { question: "¿Cuál es el límite de velocidad en el Pit Lane (estándar)?", options: ["60 km/h", "80 km/h", "100 km/h", "50 km/h"], answer: 1 },
-  { question: "¿Qué sistema permite reducir la carga aerodinámica en rectas?", options: ["ERS", "KERS", "DRS", "DAS"], answer: 2 },
-  { question: "¿Cuántos puntos recibe el ganador de un GP?", options: ["20", "15", "25", "10"], answer: 2 },
-  { question: "¿Qué neumático es el más blando en la gama actual?", options: ["C1", "C3", "C5", "C2"], answer: 2 },
-  { question: "¿Quién ostenta el récord de más campeonatos del mundo?", options: ["Hamilton / Schumacher", "Vettel", "Senna", "Prost"], answer: 0 },
-];
-
 export default function App() {
   const [status, setStatus] = useState<GameStatus>('menu');
   const [mode, setMode] = useState<'easy' | 'hard'>('easy');
@@ -46,6 +35,12 @@ export default function App() {
   const [isCrashed, setIsCrashed] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [lightState, setLightState] = useState<'red' | 'yellow' | 'green'>('red');
+
+  // Indices of questions already asked in the current run, used to draw without
+  // replacement. Refs (not state) because the draw must read them synchronously.
+  // lastId additionally guards the lap seam, where askedIds is already reset.
+  const askedIds = useRef<number[]>([]);
+  const lastId = useRef<number>(-1);
   const [dbEasy, setDbEasy] = useState<Question[]>([]);
   const [dbHard, setDbHard] = useState<Question[]>([]);
   const prefersReducedMotion = useReducedMotion();
@@ -92,13 +87,41 @@ export default function App() {
 
   // ACA ESTA EL GENERADOR DE PREGUNTAS/RESPUESTAS !!!!!
   const getNewQuestion = useCallback(() => {
-    // Use backend data for the current mode when loaded; else fall back to the hardcoded array.
+    // Use backend data for the current mode when loaded; else fall back to the local bank.
     const db = mode === 'easy' ? (dbEasy.length > 0 ? dbEasy : db_easy) : (dbHard.length > 0 ? dbHard : db_hard);
 
     if (db.length === 0) return;
 
-    const randomIndex = Math.floor(Math.random() * db.length);
-    setCurrentQuestion(db[randomIndex]);
+    // Draw without replacement while candidates remain, so a question never
+    // repeats back to back. Once the pool is exhausted, reset it for a new lap
+    // — but still exclude the question just served, or the seam of the lap would
+    // put the same question on screen twice in a row.
+    const exhausted = askedIds.current.length >= db.length;
+    let pool: Question[];
+    if (!exhausted) {
+      pool = db.filter((_, i) => !askedIds.current.includes(i));
+    } else if (db.length > 1) {
+      pool = db.filter((_, i) => i !== lastId.current);
+    } else {
+      pool = db; // single-question bank: nothing left to avoid
+    }
+    if (exhausted) askedIds.current = [];
+
+    const picked = pool[Math.floor(Math.random() * pool.length)];
+    const pickedId = db.indexOf(picked);
+    if (pickedId !== -1 && !askedIds.current.includes(pickedId)) askedIds.current.push(pickedId);
+    lastId.current = pickedId;
+
+    // Shuffle the options so the correct answer is not learnable by position.
+    // Remap `answer` to the new index, otherwise shuffling would silently
+    // mark correct answers wrong.
+    const options = [...picked.options];
+    for (let i = options.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [options[i], options[j]] = [options[j], options[i]];
+    }
+
+    setCurrentQuestion({ ...picked, options, answer: options.indexOf(picked.options[picked.answer]) });
     setLightState('red');
   }, [mode, dbEasy, dbHard]);
 
@@ -111,6 +134,8 @@ export default function App() {
     setIsMoving(true);
     setIsCrashed(false);
     setLightState('green');
+    askedIds.current = []; // a new run re-serves the whole bank
+    lastId.current = -1;
 
     // Initial movement
     setTimeout(() => {

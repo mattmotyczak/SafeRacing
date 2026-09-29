@@ -2,9 +2,11 @@
 
 **Change:** `driving-safety-question-bank`
 **Domains:** `data-layer` (primary) and `game` (draw logic). Per `rules.proposal` in `openspec/config.yaml`, both are named here because the change crosses the seam between the seeded bank and the function that draws from it.
-**Status:** fully specced and designed — nothing implemented
+**Status:** implemented and verified 2026-09-28 — `apply` and `verify` are done, `review` and `archive` remain. Read `verify-report.md` before acting on this: six planned checks did not run. **Not yet archived.**
 **Source:** `openspec/status.md` gaps 7, 9, 10, 11, plus the live evidence recorded against gap 2
-**Closes:** gaps 7, 9, 10, 11
+**Closes:** gaps 1, 2, 7, 9, 10. Gap 11 is a **standing boundary**, not a closure — the requirement was
+restated and no code changed, and the `neon_auth` isolation is asserted by inspection rather than
+proven by a snapshot.
 
 > **Scope fence, 2026-09-28.** A parallel agent is working on frontend visual design in `src/App.tsx`.
 > This change touches that file in exactly two places: **lines 23-38** (the question data, which
@@ -39,7 +41,7 @@ Findings 1 and 3 cannot be fixed independently. Replacing the content without re
 
 ### Question content
 
-- **30 easy questions** and **approximately 80 hard questions** on Argentine road safety, authored in Spanish, replacing the 5 + 5 placeholders in both the SQL seed and the offline fallback.
+- **30 easy questions** and **80 hard questions** on Argentine road safety, authored in Spanish, replacing the 5 + 5 placeholders in both the SQL seed and the offline fallback. Both counts are exact and verified, not targets.
 - Content is **road safety and driving knowledge**: signals and their meanings, speed limits, right of way, safe following distance, alcohol and fatigue, seat belts and restraints, tyres, braking and following distance, safe motorcycling, and pedestrian and cyclist vulnerability. Speed-limit figures cite **Ley 24.449 art. 51**.
 - Every question carries exactly four options and exactly one `iscorrect = TRUE` row — the invariant the live data already satisfies for the seeded questions and the one any future migration must preserve.
 - Content lands in **both** places, in the same pass: `db/migrations/0002` and `src/data/questions.easy.ts` / `src/data/questions.hard.ts`. `0001_bootstrap.sql` states the seed is transcribed from the local arrays; a content change that lands in only one of them reintroduces exactly the online/offline divergence that `fresh-db-bootstrap` fixed for order, but for content.
@@ -75,14 +77,14 @@ One migration, one data move, one function change, one new directory of typed da
 
 `src/data/questions.easy.ts` and `src/data/questions.hard.ts` export typed `Question[]` arrays, using the `Question` interface already declared at `src/App.tsx:14-19`. `App.tsx` imports them and deletes its inline banks. `getNewQuestion` selects the bank, picks a question that is not the previous one, builds a shuffled index permutation of `options`, and derives the new `answer` from the permutation. The endpoint contract is untouched: `server.js` keeps returning authored order, and the client reshuffles on the way in. That symmetry is deliberate and is argued in `design.md` — a server-side shuffle would leave the offline path with a fixed order, which is the defect being fixed.
 
-`db/migrations/0002_driving_safety_question_bank.sql` opens a transaction, deletes answers before questions, inserts the new bank under the pinned ordinal order, and commits.
+`db/migrations/0002_driving_safety_bank.sql` opens a transaction, deletes answers before questions, inserts the new bank under the pinned ordinal order, and commits.
 
 No CSS, no JSX, no new token, no new dependency, no new animation, no blur, no colour outside the existing token set. The visual contract is untouched because nothing visual changes.
 
 ## Success criteria
 
 - `npx tsc --noEmit` exits 0.
-- `npx tsc --noEmit` passes with `src/data/questions.easy.ts` and `src/data/questions.hard.ts` holding 30 and ~80 entries respectively, each with exactly 4 options and one `iscorrect`-bearing correct answer.
+- `npx tsc --noEmit` passes with `src/data/questions.easy.ts` and `src/data/questions.hard.ts` holding 30 and 80 entries respectively, each with exactly 4 options and one `iscorrect`-bearing correct answer.
 - The **framing code check** — the two-part audit enumerated in `rules.verify.audits` in `openspec/config.yaml`, part (b), over `src/`, `server.js`, `db/` — returns **zero** hits. It fails today; the F1-themed seed in `0001_bootstrap.sql` and the inline banks in `App.tsx` are two of the sources this change removes. (The in-game footer at `App.tsx:472,474` is a *second, separate* failure and is explicitly out of scope — see Non-goals. The check therefore does not go green until gap 8 is also closed, and that is stated rather than glossed.)
 - `db/migrations/0002` opens with `BEGIN` and closes with `COMMIT`; inside the transaction `DELETE FROM easy_answers` and `DELETE FROM hard_answers` appear **before** the corresponding `DELETE FROM *_questions`.
 - Every seed insert in `0002` ends with `ORDER BY v.ord`, and the ordinals are contiguous from 1 per statement — the same invariant `fresh-db-bootstrap` established in `0001`.

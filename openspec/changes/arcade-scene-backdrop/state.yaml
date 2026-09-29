@@ -9,8 +9,8 @@ phases:
   explore: done
   propose: done
   spec: done
-  design: pending
-  tasks: pending
+  design: done
+  tasks: done
   apply: pending
   verify: pending
   review: pending
@@ -19,8 +19,8 @@ artifacts:
   exploration: exploration.md
   proposal: proposal.md
   spec: specs/game/spec.md
-  design: null
-  tasks: null
+  design: openspec/changes/arcade-scene-backdrop/design.md
+  tasks: openspec/changes/arcade-scene-backdrop/tasks.md
 depends_on: []
 blocks: []
 closes_gaps: [R2-1, R2-2, R2-3, R3-2-partial, R4-1, AURA-MOTION-REDUCE, ANIMATE-PRESENCE-REDUCE]
@@ -44,8 +44,19 @@ spec_revision:
     - "Tree count per tile 4 -> 8 — 1920/240 = 8 periods fit; the old verify (840+120=960<1920) proved dead space, not off-seam clearance"
     - "Hills off-seam claim — positions kept, but a 380px max width was ADDED; without it the off-seam claim was unfalsifiable"
   live_bugs_found:
-    - "ground layer: period 40px on w-1/2 tiles, 1100 mod 40 = 20 -> half-spacing compression. SEVERITY CORRECTED: isMoving runs 3s (App.tsx:111-122), so the A/B boundary advances only 0.3 of a cycle (330px) and then PARKS at screen x=770px for the whole question period (panel gated on !isMoving at App.tsx:364). A static mid-panel artefact, not a transient 10s sweep."
-    - "sky layer: period 100px, 1920 mod 100 = 20 -> the period itself must change to 128px; a geometry-only fix is impossible"
+    - "ground layer: period 40px on w-1/2 tiles, 1100 mod 40 = 20 -> half-spacing compression. SEVERITY CORRECTED: isMoving runs 3s (App.tsx:111-122), so the A/B boundary advances only 0.3 of a cycle (330px) and then PARKS at screen x=770px for the whole question period (panel gated on !isMoving at App.tsx:364). A static mid-panel artefact, not a transient 10s sweep. SHIPS IN PR1 (pure class swap)."
+    - "sky layer: period 100px, 1920 mod 100 = 20 -> the period itself must change to 128px; a geometry-only fix is impossible. SHIPS IN PR2, atomic with the period, the duration, and the redraw."
+    - >-
+      ASYMMETRY, corrected 2026-09-28 by the R-6 ruling — these are NOT the same bug observed
+      twice, and were previously framed as if they were. GROUND (period 40) is a LIVE BUG at
+      1100px (1100 mod 40 = 20) and happens to be CLEAN at 720px (720 mod 40 = 0): a
+      flagship-layout design-consistency failure. SKY (period 100) is CLEAN at 1100px
+      (1100 mod 100 = 0) and SEAMS at 1024, 976, 852, 768, 720, 540 and 414: a responsive
+      failure, invisible on desktop and broken on every tablet and phone. One unverified
+      W mod period invariant failed differently in two places. The pre-change arcade-retrofit.md
+      record claimed both were safe at 1100px — the sky by arithmetic luck and never checked
+      elsewhere, the ground on a visual "sub-visible at alpha 0.04" claim used to stand in for an
+      arithmetic claim that was false.
   atomic_coupling:
     finding: >-
       The 128px sky period is valid ONLY on fixed 1920px tiles. 1920 mod 128 = 0, but on a
@@ -55,15 +66,19 @@ spec_revision:
       one without the other leaves the sky broken.
     status: recorded in the delta spec (Background scroll layers, and Every layer's tile width is congruent to 0 modulo its own period)
   census_note: >-
-    A grep for `arcade-scroll` returns FOUR classes, not three: sky, ground, dashes, and
-    .arcade-scroll-running (index.css:122-124, applied at ArcadeBackground.tsx:28). The fourth
-    is a play-state toggle, not a parallax layer, and MUST NOT be added to the
-    prefers-reduced-motion block. Verify-phase greps must expect four; a count of three is a
-    stale-grep signal, not a pass.
-  new_requirements: 18
+    A RAW line grep for `arcade-scroll` is NOT a valid guard — it returns 11 lines today
+    (4 definition blocks + 3 prefers-reduced-motion entries + 1 JSX ternary + 3 className
+    usages) and grows with every layer, so any number pinned to it will fail a correct
+    implementation. Count DEFINITION BLOCKS instead: `.arcade-scroll-<name> {` in
+    src/index.css returns 4 today — sky, ground, dashes (3 parallax layers) plus
+    .arcade-scroll-running (a play-state toggle, NOT a layer) — and MUST return 8 after
+    PR2, which adds hills, trees, edges, rumble (7 layers + 1 state toggle).
+    .arcade-scroll-running MUST NOT receive a prefers-reduced-motion entry; it carries
+    play state, not animation. Each of the 7 layers needs exactly one reduced-motion entry.
+  new_requirements: 20
   modified_requirements: 6
   removed_requirements: 0
-  scenarios: 26
+  scenarios: 32
   verification_model: >-
     No test runner, no browser tooling, no test dependency. npm run lint (tsc --noEmit) is the
     only automated gate. Everything else is grep audit, code read, or computed geometry, plus
@@ -85,14 +100,18 @@ design_debt:
   - id: parallax-rung-60s
     rule: AGENTS.md hard rule 5
     owed_by: design
+    status: discharged
+    discharged_in: "openspec/changes/arcade-scene-backdrop/design.md#debt-1--the-60-s-rung-parallax-rung-60s — 'Design-debt discharge > Debt 1 - the 60 s rung', which carries the decision, four rejected alternatives (existing rung / parallel far-plane scale / static hills / 40-45s intermediate) and three costs; summarised in design.md#design-debt-closure"
     note: >-
       The 25s / 10s / 2s parallax rungs are all consumed, so a rung at 60s was added for the
       hills. This is a new duration on an existing ladder and pushes against a project posture,
       so it MUST be recorded in openspec/changes/arcade-scene-backdrop/design.md with the
-      options considered and rejected.
+      options considered and rejected. DONE.
   - id: parallax-rung-120s-sky
     rule: AGENTS.md hard rule 5
     owed_by: design
+    status: discharged
+    discharged_in: "openspec/changes/arcade-scene-backdrop/design.md#debt-2--the-120-s-rung-parallax-rung-120s-sky — 'Design-debt discharge > Debt 2 - the 120 s rung', which carries the decision, four rejected alternatives (25 s, shared 60 s, the 'non-figurative gradient' defence, static) and two costs; summarised in design.md#design-debt-closure"
     note: >-
       The sky is slowed 4.8x from its shipped 25s to 120s, which puts it at 16 px/s — exactly
       half the hills. This is a SECOND deliberate tradeoff, discovered by the adversarial
@@ -100,7 +119,103 @@ design_debt:
       rejected. A shared 60s rung was rejected because it puts sky and hills at identical speed
       with one behind the other (fused plane, zero relative motion); a 100px-period sky was
       rejected as a motion-salient repetitive grating. sdd-spec deliberately did NOT create
-      design.md — the design phase owns that file.
+      design.md — the design phase owns that file. DONE — see discharged_in.
+
+reconciliation:
+  date: 2026-09-28
+  by: sdd-spec
+  trigger: >-
+    The design phase validated the delta against source and raised 10 self-contradictions in
+    design.md -> Reconciliation ledger (R-1..R-10). The orchestrator ruled on all ten; this pass
+    applies the rulings to specs/game/spec.md. Rulings, not options.
+  ledger: openspec/changes/arcade-scene-backdrop/design.md#reconciliation-ledger
+  applied:
+    - id: R-1
+      ruling: "delete 11, not 12; retain --color-on-dark; retain --color-accent-yellow as the sun; the parenthetical is removed from the delete list and the reuse table is the token's only mention"
+      applied_to: "Visual token discipline (subtraction block + the 11 enumerated), The scene palette is a fixed token set (sun row), the scenario's 12 -> 11"
+    - id: R-2
+      ruling: "score HUD gets the same pixel-panel chip the stoplight has; the 9-site blanket claim is replaced by a per-site mapping naming the score value as the exception"
+      applied_to: "Visual token discipline (per-site mapping table), NEW requirement 'The score HUD carries a pixel-panel chip' (2 scenarios)"
+    - id: R-3
+      ruling: "widen the table to all 17 white/black utilities; do not tokenise three of seven on an arbitrary basis; state the sanctioning rationale once for the group"
+      applied_to: "Visual token discipline (17-row table, all-or-none rationale stated once, and the non-white/non-tsx groups listed separately so no blended total can recur)"
+    - id: R-4
+      ruling: "--color-scene-car-body REPLACES --color-car-tier5 (1.05:1 apart, same colour); state the remaining legibility obligation and name it a human sign-off item"
+      applied_to: "Car sprite states and lives-based recoloring (rewritten; 4+1 rung table; --color-car-tier5 deleted; new scenario; 2x legibility obligation + human sign-off), Visual token discipline (the retired/replaced group)"
+    - id: R-5
+      ruling: "keep translateX(-50%); four tiles in w-[7680px] = 3840 px of pan = 2 tiles; 3840 divides all six periods; NO keyframe change is needed"
+      applied_to: "Layer coverage is bounded and the bound is recorded (the 'pan -25%' claim is withdrawn and the correction shown)"
+    - id: R-6
+      ruling: "ground seam -> PR1, sky period + tile migration -> PR2; add the verified distinction; correct the 'two live bugs exist today' framing"
+      applied_to: "Every layer's tile width is congruent to 0 modulo its own period (asymmetry table, one-invariant-two-failures paragraph, PR1/PR2 per row, sky rewritten as 'clean today at 1100 px'), The change ships as two chained pull requests, Decisions reversed -> Sky period, live_bugs_found in this file"
+    - id: R-7
+      ruling: "delete the (was 30 s) and (was 1.2 s) annotations; they cite superseded drafts of the delta, not shipped code"
+      applied_to: "Background scroll layers (both annotations removed, plus the (Previously:) line that repeated the same fiction), Decisions reversed -> Tree duration and Edge-line duration"
+    - id: R-8
+      ruling: "ground tint and road dashes draw from --color-scene-road and --color-scene-road-dashes (9.17:1), not the legacy dark-scene tokens; move --color-track-line and --color-dash into the dead-token list; add a requirement with the computed contrast as its verification"
+      applied_to: "NEW requirement 'Ground tint and road dashes draw from the scene palette' (2 scenarios, 1.02/1.06/9.17:1 recorded), Visual token discipline (the two 'retired live' tokens kept separate from the 11), The scene palette is a fixed token set"
+  resolved_by_instruction:
+    - id: R-9
+      note: >-
+        proposal.md and exploration.md each carry a third and fourth layer table. NOT EDITED —
+        resolved by instruction. The delta's header states those tables are superseded and MUST
+        NOT be implemented, and tracked_gaps -> proposal-and-exploration-layer-tables records it.
+  deferred:
+    - id: R-10
+      ruling: "out of scope; record as a PRE-EXISTING verify blocker this change does not clear"
+      note: >-
+        The framing audit's CODE CHECK fails at src/App.tsx:497,499 (the in-game footer renders
+        "Equipo Foxtrot" / "Proyecto Final"). It fails identically before and after this change.
+        sdd-verify for this change WILL FAIL that audit. That is expected and pre-existing, not
+        a regression from this work. See pre_existing_blockers below.
+  not_in_ruling:
+    - >-
+      Two line-number bases now coexist in the delta and are labelled as such: pre-existing
+      citations are HEAD e26fcf1, citations introduced by this amendment are marked "working
+      tree" and carry the +25 shift from uncommitted App.tsx work. The delta header states this so
+      a reader never compares a HEAD number to a working-tree number.
+
+design_reconciliation:
+  date: 2026-09-29
+  by: sdd-design
+  note: >-
+    design.md was reconciled against the R-1..R-10 rulings on 2026-09-29. Four pre-ruling
+    statements that had become false were corrected: the dead-token delete count (13 -> 11,
+    with the subtraction shown checkably, R-1), the blanket text-white claim (replaced by the
+    delta's per-site mapping with the score HUD at App.tsx:469 carved out as a pixel-panel
+    chip, R-2), the blended colour-utility total (replaced by three separate subtotals,
+    17 / 1 / 5, R-3), and the body-text token pairing (--color-on-surface #c2c8d0, not
+    --color-on-dark #fff1e8). The nine architecture decisions and the two discharged design
+    debts are unchanged. Two items are recorded, not solved: R-4's 2x tier-legibility
+    obligation for tiers 1-4 against --color-scene-car-body #ffc23a remains UNVERIFIED and
+    is a blocking precondition on the car-recolour task, because no ratio was supplied with
+    the ruling; and content anchors are authoritative while bare line numbers are not, as two
+    bases coexist and HEAD has moved to 453b542 without touching src/App.tsx or
+    src/index.css.
+
+pre_existing_blockers:
+  note: >-
+    Failures that sdd-verify will report and that this change does NOT cause and does NOT clear.
+    Listed so a verify-phase FAIL is not misread as a regression. None of these is in
+    closes_gaps, because closing one is not this change's job.
+  items:
+    - id: framing-audit-code-check
+      file: src/App.tsx
+      lines: [497, 499]
+      found: pre-existing
+      detail: >-
+        openspec/config.yaml -> rules.verify.audits FRAMING AUDIT code check requires 0 hits in
+        src/, server.js, db/ for the pattern universit|universidad|Equipo Foxtrot|Proyecto
+        Final|Team Foxtrot|Formula 1|Grand Prix. The in-game footer renders "Desarrollado por el
+        Equipo Foxtrot" (:497) and "Proyecto Final" (:499) to every player. This is openspec/
+        status.md gap 8 and is a BLOCKER in the base spec.
+      status: fails-identically-before-and-after
+      why_not_this_change: >-
+        Rewriting a credit line is an authorship decision for the team, not an agent's
+        judgement — deleting "Equipo Foxtrot" strips a name from work the team did. Explicitly
+        out of scope per the delta's Out of scope section, and recorded there so the verify
+        result is read correctly.
+      expected_verify_outcome: FAIL on this audit, with the failure annotated as pre-existing
 tracked_gaps:
   note: >-
     Drift found by the 2026-09-28 adversarial re-verification, recorded rather than erased. These
@@ -135,7 +250,7 @@ tracked_gaps:
         Not edited this pass — out of scope by instruction. The delta's header states that its
         own table is the single source of truth and that those two tables are superseded and
         MUST NOT be implemented. Still dirty for the design phase to reconcile.
-next_phase: design
+next_phase: apply
 recovered_from:
   store: engram
   observations: [54]
