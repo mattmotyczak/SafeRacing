@@ -4,14 +4,14 @@ schema: spec-driven
 artifact_store: openspec
 project: saferacing
 opened: 2026-09-01
-implemented: null
+implemented: 2026-10-02-partial-pr1
 phases:
   explore: done
   propose: done
   spec: done
   design: done
   tasks: done
-  apply: pending
+  apply: in-progress
   verify: pending
   review: pending
   archive: pending
@@ -251,6 +251,57 @@ tracked_gaps:
         own table is the single source of truth and that those two tables are superseded and
         MUST NOT be implemented. Still dirty for the design phase to reconcile.
 next_phase: apply
+
+apply_pr1:
+  date: 2026-10-02
+  by: sdd-apply
+  scope: "PR1 only — tasks 1.1 through 1.17. Contract compliance and provenance; no layer count, period, duration or composition change. PR2 (2.1-2.16) NOT started."
+  outcome: "All 17 PR1 tasks implemented. 152 changed lines across 4 source files."
+  changed_files:
+    src/index.css: "73+/16- — --shadow-hard token; 11 dead tokens deleted; false 'Legacy tokens' comment deleted; 4 overlay/divider roles, 1 ground tint, 5 scanline stops, 3 lamp-shadow hues added; 3 hard-offset sites collapsed onto var(--shadow-hard); .car-aura now reads var(--car-color); blur removal note."
+    src/App.tsx: "37+/23- — 3 stoplight glows to hard offsets with per-lamp hue; drop-shadow and shadow-lg deleted; 2 pixel-font negative-tracking classes deleted; 8 of 9 text-white sites tokenised; 5 non-text white/black utilities tokenised; Jugar shadow onto shadow-hard; 5 entrance animations gated on prefersReducedMotion."
+    src/components/ArcadeBackground.tsx: "19+/12- — ground container w-[200%] to w-[3840px] and both tiles to w-[1920px] (pure class swap); redundant dash backgroundSize/backgroundRepeat deleted; 3 border-white/5 and 1 bg-slate-900/20 tokenised."
+    src/components/CarSprite.tsx: "23+/13- — 8 rx values moved onto the 4-unit grid; --car-color moved from the svg to the wrapper so .car-aura can read it; motion-reduce:animate-none added to the aura."
+  verification:
+    - "V.1 npx tsc --noEmit exits 0. Also npm run build exits 0."
+    - "V.2 hex/rgba in src/**/*.tsx = 0 (was 3). Offset literal in src/ = exactly 1, inside --shadow-hard. blur = 0. rounded-* other than rounded-none = 0. rx= = 8, ry= = 0. var(--car-color) readers = 1. raw white/black/slate opacity utilities = 0. .arcade-scroll definition blocks = 4, unchanged for PR1."
+    - "V.3 ground: pan 1920px, period 40px, 1920 mod 40 = 0 (= 48 periods) at every viewport width; speed 192 px/s; coverage 3840 >= 1100; the parked A/B boundary rests at screen x = 1344, outside the 1100px panel. Superseded tile was w-1/2, where 1100 mod 40 = 20 (seam) and 720 mod 40 = 0 (clean) — the asymmetry the delta records."
+    - "Build-output inspection: all 10 new utilities and all 14 new custom properties are emitted in dist/assets/index-*.css, and .car-aura resolves var(--car-color). This closes the gap greps cannot: an undefined token emits no CSS and would fail silently."
+  deviations_from_launch_summary:
+    - id: score-value-colour
+      launch_summary_said: "text-white x9 replaced by the on-dark token"
+      implemented: "8 of 9 replaced. App.tsx score value keeps text-white, with a code comment naming it the exception."
+      authority: "tasks.md 1.10 and the delta's per-site mapping table both exclude the score value from this change; its backing surface is the new playing scene, where on-dark measures 1.76:1 and #ffffff 1.95:1, both failing. It becomes legible only once tasks.md 2.12 puts a .pixel-panel HUD chip behind it."
+    - id: reduced-motion-gate-count
+      launch_summary_said: "gate the 6 ungated entrance animations"
+      implemented: "5 gated — stage wrapper, menu, mode-select, question panel, game over. The footer wrapper was NOT gated."
+      authority: "The run instructions forbid editing src/App.tsx:488-502, which contains the footer motion.div. tasks.md 1.17 names that wrapper as the 6th."
+    - id: stoplight-in-pr1
+      delta_said: "'the stoplight lamp' is PR2 visual work"
+      implemented: "The lamp contract lands in PR1 — lit lamp takes a hard offset in a darkened shade of its own hue, unlit lamps take none."
+      authority: "tasks.md 1.5 is a PR1 task and the run instructions state it explicitly. Deleting the three rgba() glows alone would have left the lamps shadowless, which is permitted but leaves the hard-offset-only contract half-delivered."
+  engineering_notes:
+    - >-
+      Prose comments that QUOTE an audited literal break the audit that greps for it. Four
+      comments added during this pass each contained one of the very strings the contract
+      counts: the offset literal, the blur patterns, the rx values, and a deleted utility
+      name. All were rewritten to describe without quoting. Any future comment added near
+      these greps must follow the same rule.
+    - >-
+      A CSS comment cannot contain the glob src/** — the */ inside it terminates the comment
+      early and Tailwind then parses the remainder as content inside @theme, failing the
+      build with "@theme blocks must only contain custom properties". tsc and every grep
+      passed on the broken file; only npm run build caught it. Run the build, not just tsc,
+      whenever @theme changes.
+    - >-
+      The emitted-CSS check for deleted utilities is not a valid audit: @theme extends rather
+      than replaces Tailwind's default palette, so --color-white, --color-slate-900 and
+      --tw-drop-shadow are present in dist regardless of usage. Absence must be asserted on
+      the source, which is what config.yaml actually specifies.
+  not_done:
+    - "PR2 tasks 2.1-2.16 — all seven scene layers, the atomic sky period+tile migration, answer feedback, question typography, score HUD chip, car tier recolour, and the 2.14 human sign-off gate."
+    - "R3-2 automated seam regression test — not closable from this project."
+
 recovered_from:
   store: engram
   observations: [54]

@@ -9,30 +9,18 @@
   --color-surface: #1a1a2e;
   --color-on-dark: #fff1e8;
   --color-accent-red: #ff004d;
-  --color-accent-blue: #29adff;
   --color-accent-yellow: #ffec27;
-  --color-accent-green: #00e436;
   --color-accent-orange: #ffa300;
-  --color-accent-pink: #ff77a8;
   --color-on-surface: #c2c8d0;
 
-  /* Legacy tokens kept for backward compatibility */
-  --color-surface-bright: #31394d;
-  --color-surface-container-lowest: #1a1a2e;
-  --color-surface-container-low: #131b2e;
-  --color-surface-container: #171f33;
-  --color-surface-container-high: #222a3d;
-  --color-surface-container-highest: #2d3449;
   --color-on-surface-variant: #bdc8d1;
   --color-primary: #8ed5ff;
   --color-on-primary: #00354a;
-  --color-secondary: #b9c8de;
   --color-tertiary: #98d3ff;
 
   /* Pixel Arcade delta tokens */
   --color-frame-strong: #6a6a9a;
   --color-hard-shadow: #05050c;
-  --color-danger-text: #ff2d63;
   --color-track-line: rgba(41, 173, 255, 0.04);
   --color-dash: rgba(255, 255, 255, 0.15);
   --color-vignette: rgba(5, 5, 15, 0.55);
@@ -49,12 +37,48 @@
   --color-car-spark: #f97316;
   --color-car-headlight: #facc15;
 
+  /* Overlay + divider roles. These absorb the raw Tailwind white/black step-opacities that
+     were spelled inline across the component sources. One token per distinct alpha, not
+     one per utility: the alpha is part of the role rather than a separate colour, so a
+     5% token serves both a border and a hover fill, and a 10% token serves both a
+     background and a border. */
+  --color-overlay-faint: rgba(255, 255, 255, 0.05);
+  --color-overlay-soft: rgba(255, 255, 255, 0.1);
+  --color-scrim: rgba(0, 0, 0, 0.2);
+
+  /* Ground layer container tint — replaces bg-slate-900/20 in ArcadeBackground.tsx.
+     PR1 only: task 2.6 repoints the ground tint at --color-scene-road and retires this. */
+  --color-ground-tint: rgba(15, 23, 42, 0.2);
+
+  /* .scanline CRT overlay — the five hard-coded rgba() stops the rule used to carry. */
+  --color-scan-blank: rgba(18, 16, 16, 0);
+  --color-scan-line: rgba(0, 0, 0, 0.25);
+  --color-scan-fringe-red: rgba(255, 0, 0, 0.06);
+  --color-scan-fringe-green: rgba(0, 255, 0, 0.02);
+  --color-scan-fringe-blue: rgba(0, 0, 255, 0.06);
+
+  /* Stoplight lamp offsets. Each is a darkened shade of its OWN lamp hue, held at the
+     same HSL hue as the Tailwind -500 fill it sits under: red-500 hsl(0 90% 59%) ->
+     hsl(0 90% 30%), yellow-500 hsl(45 92% 48%) -> hsl(45 35% 28%), green-500
+     hsl(142 71% 45%) -> hsl(142 72% 30%). Holding the hue is what makes the offset read
+     as the lamp deepened rather than as a different colour behind it. */
+  --color-lamp-shadow-red: #910808;
+  --color-lamp-shadow-yellow: #886807;
+  --color-lamp-shadow-green: #287143;
+
   /* Zero every radius token — hard corners everywhere; pill-shaped exceptions are squared explicitly in App.tsx */
   --radius-xs: 0;
   --radius-sm: 0;
   --radius-md: 0;
   --radius-lg: 0;
   --radius-xl: 0;
+
+  /* The one sanctioned shadow. Coupled to --color-hard-shadow by design: change that
+     colour and every hard offset in the product moves together. The offset geometry is
+     never restated — the literal occurs exactly once in src/, in the line below — so a
+     per-instance hue change (the stoplight lamps) remaps --color-hard-shadow on the
+     element and inherits this geometry unchanged instead of adding a second literal. */
+  --shadow-hard: 4px 4px 0 var(--color-hard-shadow);
 }
 
 @layer base {
@@ -66,17 +90,33 @@
 @layer components {
   .pixel-panel {
     @apply bg-surface border-2 border-frame-strong;
-    box-shadow: 4px 4px 0 var(--color-hard-shadow);
+    box-shadow: var(--shadow-hard);
   }
 
   .scanline {
-    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
-                linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    background: linear-gradient(var(--color-scan-blank) 50%, var(--color-scan-line) 50%),
+                linear-gradient(90deg, var(--color-scan-fringe-red), var(--color-scan-fringe-green), var(--color-scan-fringe-blue));
     background-size: 100% 2px, 3px 100%;
   }
 
   .game-sector-glow {
-    box-shadow: inset 0 0 0 2px var(--color-frame-strong), 4px 4px 0 var(--color-hard-shadow);
+    box-shadow: inset 0 0 0 2px var(--color-frame-strong), var(--shadow-hard);
+  }
+
+  /* Stoplight lamp offsets. Each class ONLY remaps --color-hard-shadow; the offset
+     geometry stays in --shadow-hard, which is why a per-lamp hue costs no second copy
+     of the offset literal. Unlit lamps get no shadow-hard class at all, so they carry
+     no shadow — their fill step (bg-*-500 vs bg-*-950/40) is the remaining signal. */
+  .stoplight-lamp-red {
+    --color-hard-shadow: var(--color-lamp-shadow-red);
+  }
+
+  .stoplight-lamp-yellow {
+    --color-hard-shadow: var(--color-lamp-shadow-yellow);
+  }
+
+  .stoplight-lamp-green {
+    --color-hard-shadow: var(--color-lamp-shadow-green);
   }
 
   @keyframes scrollBackground {
@@ -94,6 +134,10 @@
   }
 
   .car-aura {
+    /* --car-color is set on the CarSprite wrapper div and consumed HERE. That is what
+       makes the variable live: it previously resolved on the <svg> and was read by
+       nothing, which is a set-but-unread variable (tasks.md 1.15). */
+    background-color: var(--car-color);
     opacity: 0.6;
     animation: pulse 1.5s steps(1) infinite;
   }
@@ -133,3 +177,16 @@
     animation: none !important;
   }
 }
+
+/* BLUR REMOVAL NOTE — trial performed, rejected, not parked.
+   A blurred/glowing layer was trialled here and cut. Why: CSS blur interpolates
+   between neighbouring pixels, which cannot be expressed on the 4-unit pixel pitch
+   every sprite and panel here is drawn on. The moment a soft edge is admitted the
+   hard 8-bit edge stops being a constraint and becomes a preference, and the arcade
+   read collapses into generic soft-focus UI. Glow is therefore the hard offset in
+   --shadow-hard, not a blur.
+   There is deliberately NO functional toggle and NO DEBUG-DELETABLE marker here: the
+   attempt is settled, not staged for a later look. The corresponding audit greps for
+   the backdrop-filter, filter-function and utility spellings of this effect and
+   returns 0 hits across src/. This note deliberately never spells those patterns, or
+   it would fail the very audit it documents. */

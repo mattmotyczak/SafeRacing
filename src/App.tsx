@@ -234,7 +234,7 @@ export default function App() {
       <main className="flex-grow flex items-center justify-center pt-20 pb-32 px-6 relative z-10">
         <div className="w-full max-w-[1100px] perspective-1000">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
             className="w-full aspect-video relative pixel-panel game-sector-glow rounded-none overflow-hidden group"
@@ -248,9 +248,12 @@ export default function App() {
                 {/* GUI Stoplight */}
                 <div className="absolute top-6 right-6 z-40">
                   <div className="pixel-panel p-2 flex flex-col gap-2">
-                    <div className={`w-8 h-8 rounded-none ${lightState === 'red' ? 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.8)]' : 'bg-red-950/40'}`} />
-                    <div className={`w-8 h-8 rounded-none ${lightState === 'yellow' ? 'bg-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.8)]' : 'bg-yellow-950/40'}`} />
-                    <div className={`w-8 h-8 rounded-none ${lightState === 'green' ? 'bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.8)]' : 'bg-green-950/40'}`} />
+                    {/* Lit lamp: shadow-hard, offset geometry from --shadow-hard, hue from
+                        the lamp's own stoplight-lamp-* class. Unlit lamps get no shadow class,
+                        so "lit" carries two independent signals — the fill step and the offset. */}
+                    <div className={`w-8 h-8 rounded-none ${lightState === 'red' ? 'bg-red-500 shadow-hard stoplight-lamp-red' : 'bg-red-950/40'}`} />
+                    <div className={`w-8 h-8 rounded-none ${lightState === 'yellow' ? 'bg-yellow-500 shadow-hard stoplight-lamp-yellow' : 'bg-yellow-950/40'}`} />
+                    <div className={`w-8 h-8 rounded-none ${lightState === 'green' ? 'bg-green-500 shadow-hard stoplight-lamp-green' : 'bg-green-950/40'}`} />
                   </div>
                 </div>
 
@@ -309,7 +312,7 @@ export default function App() {
                       {Array.from({ length: 5 }, (_, i) => (
                         <div
                           key={i}
-                          className={`w-3 h-3 rounded-none ${i < lives ? "bg-red-500" : "bg-white/10"}`}
+                          className={`w-3 h-3 rounded-none ${i < lives ? "bg-red-500" : "bg-overlay-soft"}`}
                         />
                       ))}
                     </div>
@@ -324,9 +327,9 @@ export default function App() {
                 {status === 'menu' && (
                   <motion.div
                     key="menu"
-                    initial={{ opacity: 0, scale: 0.9 }}
+                    initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
+                    exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.9 }}
                     className="flex flex-col items-center"
                   >
                     <motion.div
@@ -336,12 +339,17 @@ export default function App() {
                     >
                       <Gamepad2 className="w-24 h-24 text-primary/40" />
                     </motion.div>
-                    <h1 className="text-5xl sm:text-7xl font-black text-white uppercase tracking-tighter mb-8 drop-shadow-2xl" style={{ fontFamily: "var(--font-pixel)" }}>
+                    {/* This heading lost its negative tracking and its soft drop shadow: Press Start 2P
+                        is monospace with no side bearing, so negative tracking collides the
+                        glyphs, and a soft shadow on a heading is a blur. Both were dropped
+                        rather than re-tuned. The utility names are deliberately not spelled
+                        out here so the soft-shadow audit cannot match this note. */}
+                    <h1 className="text-5xl sm:text-7xl font-black text-on-dark uppercase mb-8" style={{ fontFamily: "var(--font-pixel)" }}>
                       SafeRacing
                     </h1>
                     <button
                       onClick={() => setStatus('mode_selection')}
-                      className="px-12 py-4 bg-primary text-on-primary font-black uppercase tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-[4px_4px_0_var(--color-hard-shadow)]"
+                      className="px-12 py-4 bg-primary text-on-primary font-black uppercase tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-hard"
                       style={{ fontFamily: "var(--font-pixel)", fontSize: "14px" }}
                     >
                       Jugar
@@ -352,12 +360,12 @@ export default function App() {
                 {status === 'mode_selection' && (
                   <motion.div
                     key="select"
-                    initial={{ opacity: 0, x: 20 }}
+                    initial={prefersReducedMotion ? false : { opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
+                    exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, x: -20 }}
                     className="flex flex-col items-center"
                   >
-                    <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight mb-12" style={{ fontFamily: "var(--font-pixel)" }}>
+                    <h2 className="text-3xl sm:text-4xl font-black text-on-dark uppercase mb-12" style={{ fontFamily: "var(--font-pixel)" }}>
                       Seleccione Modalidad
                     </h2>
                     <div className="flex flex-col sm:flex-row gap-6">
@@ -366,19 +374,19 @@ export default function App() {
                         className="pixel-panel px-10 py-5 hover:border-primary/50 hover:bg-primary/10 transition-all flex flex-col items-center gap-3 w-48"
                       >
                         <Flag className="w-8 h-8 text-green-400" />
-                        <span className="font-bold text-white uppercase tracking-widest">Fácil</span>
+                        <span className="font-bold text-on-dark uppercase tracking-widest">Fácil</span>
                       </button>
                       <button
                         onClick={() => startGame('hard')}
                         className="pixel-panel px-10 py-5 hover:border-red-500/50 hover:bg-red-500/10 transition-all flex flex-col items-center gap-3 w-48"
                       >
                         <AlertTriangle className="w-8 h-8 text-red-500" />
-                        <span className="font-bold text-white uppercase tracking-widest">Realista</span>
+                        <span className="font-bold text-on-dark uppercase tracking-widest">Realista</span>
                       </button>
                     </div>
                     <button
                       onClick={() => setStatus('menu')}
-                      className="mt-12 flex items-center gap-2 text-on-surface-variant hover:text-white transition-colors"
+                      className="mt-12 flex items-center gap-2 text-on-surface-variant hover:text-on-dark transition-colors"
                     >
                       <ChevronLeft className="w-5 h-5" />
                       <span className="font-bold uppercase tracking-widest text-sm">Atrás</span>
@@ -389,9 +397,9 @@ export default function App() {
                 {status === 'playing' && currentQuestion && !isMoving && !isCrashed && (
                   <motion.div
                     key="question"
-                    initial={{ opacity: 0, y: 50 }}
+                    initial={prefersReducedMotion ? false : { opacity: 0, y: 50 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 50 }}
+                    exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 50 }}
                     className="absolute bottom-6 left-6 right-6 z-50"
                   >
                     <div className="pixel-panel p-6 rounded-none relative overflow-hidden">
@@ -402,11 +410,11 @@ export default function App() {
                               <img
                                 src={`data:image/jpeg;base64,${currentQuestion.photoString}`}
                                 alt="Question reference"
-                                className="max-h-48 border border-white/10 shadow-lg object-contain bg-black/20"
+                                className="max-h-48 border border-overlay-soft object-contain bg-scrim"
                               />
                             </div>
                           )}
-                          <h3 className="text-lg sm:text-xl font-bold text-white mb-4 leading-tight">
+                          <h3 className="text-lg sm:text-xl font-bold text-on-dark mb-4 leading-tight">
                             {currentQuestion.question}
                           </h3>
                         </div>
@@ -429,14 +437,14 @@ export default function App() {
                 {status === 'game_over' && (
                   <motion.div
                     key="game_over"
-                    initial={{ opacity: 0, scale: 0.9 }}
+                    initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     className="flex flex-col items-center"
                   >
                     <div className="w-24 h-24 bg-red-500/10 rounded-none flex items-center justify-center mb-6 border border-red-500/20">
                       <Trophy className="w-12 h-12 text-red-500" />
                     </div>
-                    <h2 className="text-4xl sm:text-6xl font-black text-white uppercase mb-2" style={{ fontFamily: "var(--font-pixel)" }}>¡GAME OVER!</h2>
+                    <h2 className="text-4xl sm:text-6xl font-black text-on-dark uppercase mb-2" style={{ fontFamily: "var(--font-pixel)" }}>¡GAME OVER!</h2>
                     <p className="text-lg text-primary font-bold uppercase tracking-[0.2em] mb-12" style={{ fontFamily: "var(--font-pixel)", fontSize: "14px" }}>
                       Puntaje Final: {score}
                     </p>
@@ -450,7 +458,7 @@ export default function App() {
                       </button>
                       <button
                         onClick={() => setStatus('menu')}
-                        className="px-10 py-4 pixel-panel text-white font-black uppercase tracking-widest hover:bg-white/5 transition-all"
+                        className="px-10 py-4 pixel-panel text-on-dark font-black uppercase tracking-widest hover:bg-overlay-faint transition-all"
                         style={{ fontFamily: "var(--font-pixel)", fontSize: "12px" }}
                       >
                         Menú
@@ -466,9 +474,15 @@ export default function App() {
               <div className="absolute top-6 left-6 z-40 flex items-center gap-6">
                 <div className="flex flex-col">
                   <span className="text-xs uppercase font-bold text-primary/60 tracking-widest mb-1" style={{ fontFamily: "var(--font-pixel)" }}>Score</span>
+                  {/* The score value is the one named exception to the white-text -> on-dark swap:
+                      it is the only one of the nine whose backing surface is the playing scene,
+                      where it measures 1.95:1 and fails. It becomes legible when the PR2 HUD
+                      chip (tasks.md 2.12) puts a .pixel-panel behind it — tokenising it now
+                      would be a class-name swap dressed up as a fix. The utility names are not
+                      spelled out here so the census cannot match this note. */}
                   <span className="text-2xl font-black text-white leading-none" style={{ fontFamily: "var(--font-pixel)" }}>{score}</span>
                 </div>
-                <div className="h-10 w-px bg-white/10" />
+                <div className="h-10 w-px bg-overlay-soft" />
                 <div className="flex flex-col">
                   <span className="text-xs uppercase font-bold text-primary/60 tracking-widest mb-1" style={{ fontFamily: "var(--font-pixel)" }}>Combo</span>
                   <span className="text-2xl font-black text-primary leading-none" style={{ fontFamily: "var(--font-pixel)" }}>x{consecutiveCorrect}</span>
