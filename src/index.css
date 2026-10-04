@@ -21,8 +21,6 @@
   /* Pixel Arcade delta tokens */
   --color-frame-strong: #6a6a9a;
   --color-hard-shadow: #05050c;
-  --color-track-line: rgba(41, 173, 255, 0.04);
-  --color-dash: rgba(255, 255, 255, 0.15);
   --color-vignette: rgba(5, 5, 15, 0.55);
   --color-atmosphere: rgba(10, 10, 20, 0.6);
   --color-smoke: #8a9bb5;
@@ -33,9 +31,82 @@
   --color-car-tier5: #facc15;
   --color-car-window: #bfdbfe;
   --color-car-dark: #1e293b;
-  --color-car-damage: #ef4444;
-  --color-car-spark: #f97316;
   --color-car-headlight: #facc15;
+
+  /* Scene tokens — the --color-scene-* namespace holds per-material tone ramps.
+     Every material gets 4 tones (highlight, light, base, shadow) + shared outline.
+     OKLab-coherent values for Gungeon/Gen-3 palette: muted greens, warm oranges, deep blues.
+     The flat 12-token set is superseded; ramps replace single fills. */
+
+  /* Shared outline — dark tone used by every sprite form */
+  --color-scene-outline: #0a0a12;
+
+  /* Sky — two-stop gradient, not a shaded form */
+  --color-scene-sky-horizon: #bfe9ff;
+  --color-scene-sky-top:     #5ec5f5;
+
+  /* Sun — 4-tone ramp (reuses --color-accent-yellow as base) */
+  --color-scene-sun-highlight: #fff8b0;
+  --color-scene-sun-light:     #ffe870;
+  --color-scene-sun-base:      #ffec27;   /* = --color-accent-yellow */
+  --color-scene-sun-shadow:    #c9b81f;
+
+  /* Clouds — 4-tone ramp, cool white */
+  --color-scene-cloud-highlight: #ffffff;
+  --color-scene-cloud-light:     #e8ebf0;
+  --color-scene-cloud-base:      #c8cdd8;
+  --color-scene-cloud-shadow:    #9aa3b4;
+
+  /* Hills — 3-tone mass (base, light, shadow); highlight not used on distant mass */
+  --color-scene-hills-highlight: #6ec77a;
+  --color-scene-hills-light:     #4a9e5c;
+  --color-scene-hills-base:      #3a7d46;
+  --color-scene-hills-shadow:    #2a5d32;
+
+  /* Trees — 4-tone ramp */
+  --color-scene-trees-highlight: #5ec96a;
+  --color-scene-trees-light:     #2f7a46;
+  --color-scene-trees-base:      #245f38;
+  --color-scene-trees-shadow:    #184226;
+
+  /* Grass — 3-tone verge (base, light, shadow); highlight not used */
+  --color-scene-grass-highlight: #6ec77a;
+  --color-scene-grass-light:     #46964f;
+  --color-scene-grass-base:      #36783d;
+  --color-scene-grass-shadow:    #265a2b;
+
+  /* Road — 4-tone ramp (warm asphalt) */
+  --color-scene-road-highlight: #4a4640;
+  --color-scene-road-light:     #3d3934;
+  --color-scene-road-base:      #2e2b27;
+  --color-scene-road-shadow:    #1f1d1a;
+
+  /* Rumble red — 4-tone ramp */
+  --color-scene-rumble-red-highlight: #f86a6a;
+  --color-scene-rumble-red-light:     #e03a3a;
+  --color-scene-rumble-red-base:      #c02a2a;
+  --color-scene-rumble-red-shadow:    #901a1a;
+
+  /* Rumble white — 4-tone ramp */
+  --color-scene-rumble-white-highlight: #ffffff;
+  --color-scene-rumble-white-light:     #f0f0f5;
+  --color-scene-rumble-white-base:      #d8d8e0;
+  --color-scene-rumble-white-shadow:    #b8b8c8;
+
+  /* Road dashes — 4-tone ramp */
+  --color-scene-road-dashes-highlight: #f8f8ff;
+  --color-scene-road-dashes-light:     #e8e8f0;
+  --color-scene-road-dashes-base:      #d0d0e0;
+  --color-scene-road-dashes-shadow:    #b0b0c8;
+
+  /* Car body — 4-tone orange ramp */
+  --color-scene-car-highlight: #ffd860;
+  --color-scene-car-light:     #ffc23a;   /* = --color-scene-car-body */
+  --color-scene-car-base:      #e8a828;
+  --color-scene-car-shadow:    #c08818;
+  --color-scene-car-window:    #bfdbfe;
+  --color-scene-car-dark:      #1e293b;
+  --color-scene-car-headlight: #facc15;
 
   /* Overlay + divider roles. These absorb the raw Tailwind white/black step-opacities that
      were spelled inline across the component sources. One token per distinct alpha, not
@@ -46,11 +117,7 @@
   --color-overlay-soft: rgba(255, 255, 255, 0.1);
   --color-scrim: rgba(0, 0, 0, 0.2);
 
-  /* Ground layer container tint — replaces bg-slate-900/20 in ArcadeBackground.tsx.
-     PR1 only: task 2.6 repoints the ground tint at --color-scene-road and retires this. */
-  --color-ground-tint: rgba(15, 23, 42, 0.2);
-
-  /* .scanline CRT overlay — the five hard-coded rgba() stops the rule used to carry. */
+  /* .scanline CRT overlay — the five hard-coded colour stops the rule used to carry. */
   --color-scan-blank: rgba(18, 16, 16, 0);
   --color-scan-line: rgba(0, 0, 0, 0.25);
   --color-scan-fringe-red: rgba(255, 0, 0, 0.06);
@@ -119,6 +186,25 @@
     --color-hard-shadow: var(--color-lamp-shadow-green);
   }
 
+  /* Arcade background scroll layers — paused until isMoving adds the class.
+   Durations are set per layer because the pan distance is always 1920px, so the
+   duration IS the depth cue: sky 16 px/s (120s), hills 32 px/s (60s), trees
+   76.8 px/s (25s), ground 192 px/s (10s), edges/rumble/dashes 960 px/s (2s).
+   One shared duration would drag every layer to a single speed and collapse the
+   depth read the whole scene depends on — the sky has to read as far away, and
+   the dashes as underfoot, at the same instant.
+   
+   Play state is controlled via CSS variable --scroll-state on the container:
+   .arcade-scroll-container sets --scroll-state: paused;
+   .arcade-scroll-running sets --scroll-state: running;
+   Each layer reads animation-play-state: var(--scroll-state, paused). */
+  .arcade-scroll-container {
+    --scroll-state: paused;
+  }
+  .arcade-scroll-running {
+    --scroll-state: running;
+  }
+
   @keyframes scrollBackground {
     from { transform: translateX(0); }
     to { transform: translateX(-50%); }
@@ -133,34 +219,35 @@
     animation: carBounce 300ms steps(1) infinite;
   }
 
-  .car-aura {
-    /* --car-color is set on the CarSprite wrapper div and consumed HERE. That is what
-       makes the variable live: it previously resolved on the <svg> and was read by
-       nothing, which is a set-but-unread variable (tasks.md 1.15). */
-    background-color: var(--car-color);
-    opacity: 0.6;
-    animation: pulse 1.5s steps(1) infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 0.8; }
-  }
-
-  /* Arcade background scroll layers — paused until isMoving adds the class */
-  .arcade-scroll-sky {
-    animation: scrollBackground 25s linear infinite;
-    animation-play-state: paused;
-  }
-
-  .arcade-scroll-ground {
-    animation: scrollBackground 10s linear infinite;
-    animation-play-state: paused;
-  }
-
+  /* Scroll layers — animation play state controlled by container's --scroll-state */
+  .arcade-scroll-sky,
+  .arcade-scroll-hills,
+  .arcade-scroll-trees,
+  .arcade-scroll-ground,
+  .arcade-scroll-edges,
+  .arcade-scroll-rumble,
   .arcade-scroll-dashes {
-    animation: scrollBackground 2s linear infinite;
-    animation-play-state: paused;
+    animation: scrollBackground 120s linear infinite;
+    animation-play-state: var(--scroll-state, paused);
+  }
+
+  /* Override durations per layer for parallax depth */
+  .arcade-scroll-sky {
+    animation-duration: 120s;
+  }
+  .arcade-scroll-hills {
+    animation-duration: 60s;
+  }
+  .arcade-scroll-trees {
+    animation-duration: 25s;
+  }
+  .arcade-scroll-ground {
+    animation-duration: 10s;
+  }
+  .arcade-scroll-edges,
+  .arcade-scroll-rumble,
+  .arcade-scroll-dashes {
+    animation-duration: 2s;
   }
 
   .arcade-scroll-running {
@@ -170,10 +257,13 @@
 
 @media (prefers-reduced-motion: reduce) {
   .arcade-scroll-sky,
+  .arcade-scroll-hills,
+  .arcade-scroll-trees,
   .arcade-scroll-ground,
+  .arcade-scroll-edges,
+  .arcade-scroll-rumble,
   .arcade-scroll-dashes,
-  .car-bounce,
-  .car-aura {
+  .car-bounce {
     animation: none !important;
   }
 }

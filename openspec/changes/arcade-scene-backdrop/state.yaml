@@ -4,7 +4,7 @@ schema: spec-driven
 artifact_store: openspec
 project: saferacing
 opened: 2026-09-01
-implemented: 2026-10-02-partial-pr1
+implemented: 2026-10-02-partial-pr1-partial-pr2-scene
 phases:
   explore: done
   propose: done
@@ -75,10 +75,15 @@ spec_revision:
     PR2, which adds hills, trees, edges, rumble (7 layers + 1 state toggle).
     .arcade-scroll-running MUST NOT receive a prefers-reduced-motion entry; it carries
     play state, not animation. Each of the 7 layers needs exactly one reduced-motion entry.
-  new_requirements: 20
+  new_requirements: 24
   modified_requirements: 6
   removed_requirements: 0
-  scenarios: 32
+  scenarios: 43
+  counts_revised: >-
+    2026-10-03. Raised from 20/32 by the art-direction amendment below: 4 requirements added
+    (per-sprite crisp edges and resolutions, outline presence, Bayer dithering at band
+    transitions, atmospheric desaturation by depth layer) and 11 scenarios added. The original
+    2026-09-28 counts are the counts of that revision.
   verification_model: >-
     No test runner, no browser tooling, no test dependency. npm run lint (tsc --noEmit) is the
     only automated gate. Everything else is grep audit, code read, or computed geometry, plus
@@ -301,6 +306,198 @@ apply_pr1:
   not_done:
     - "PR2 tasks 2.1-2.16 — all seven scene layers, the atomic sky period+tile migration, answer feedback, question typography, score HUD chip, car tier recolour, and the 2.14 human sign-off gate."
     - "R3-2 automated seam regression test — not closable from this project."
+
+apply_pr2_scene:
+  date: 2026-10-02
+  by: sdd-apply
+  trigger: >-
+    Maintainer reported red, yellow and orange pixels glowing behind the car, asked for
+    them removed, and asked for the background scenery and road work to follow
+    automatically. The crash signal was explicitly reduced to the existing fade.
+  scope: "Tasks 2.1-2.8 (the scene and the road) plus the car-glow removal. Tasks 2.9-2.13 deliberately NOT started — see not_done."
+  user_directives:
+    - "Delete the red/orange/yellow pixels behind the car. Keep only the crash fade."
+    - "Do not carry the per-pixel damage marks. The maintainer reported they rendered regardless of vehicle state."
+    - "Stay inside this instruction and the already-proposed designs. Do not revisit other aspects."
+  car_glow_root_cause: >-
+    Three separate sources, not one. (1) .car-aura painted the car body colour across
+    the whole sprite box at 0.6 opacity behind the car whenever lives >= 5. (2) The
+    damage marks on the crash frame used --color-car-damage #ef4444 red and
+    --color-car-spark #f97316 orange at 0.7 opacity. (3) --color-car-tier5 #facc15
+    yellow is the 5+ lives body colour. The maintainer observed all three at once
+    because the aura and the spark marks share the space directly behind the sprite.
+  changed:
+    src/index.css: >-
+      11 --color-scene-* tokens added; --color-track-line, --color-dash and
+      --color-ground-tint retired; .car-aura, @keyframes pulse and the .car-aura
+      reduced-motion entry deleted; --color-car-damage and --color-car-spark deleted;
+      scroll layers 3 -> 7 (sky 120s, hills 60s, trees 25s, ground 10s, edges 2s,
+      rumble 2s, dashes 2s); reduced-motion entries 3 -> 7.
+    src/components/ArcadeBackground.tsx: >-
+      3 layers -> 7, repainted sky -> hills -> trees -> ground -> edges -> rumble ->
+      dashes. Every animated layer now uses w-[3840px] containers with two
+      w-[1920px] tiles, plus a second synced row so viewports wider than 1920px stay
+      covered to 7680px. Sky migrated atomically to fixed tiles, a vertical two-stop
+      sky-top-to-horizon gradient, a sun and two off-seam clouds. Hills are 3 SVG peaks
+      at 213/853/1493; trees are 8 SVG trees at 120+240k. Ground is a flat road fill;
+      edges are a 60px-period rumble-white gradient; rumble is a 192px-period
+      red/white kerb; dashes repointed to --color-scene-road-dashes. Dead tileGradient
+      and groundGradient constants removed.
+    src/components/CarSprite.tsx: >-
+      rx values returned to 2/1 per the 1.14 supersession; the damage prop and all four
+      damage/spark rects deleted; the .car-aura sibling div deleted; the --car-color
+      wrapper custom property deleted with it; header and crash-frame comments rewritten.
+  verification:
+    - "V.1 npx tsc --noEmit exits 0. npx vite build prints a built line."
+    - "V.2 census 15 lines = 8 definitions + 7 reduced-motion entries. rx = 8, ry = 0, all rx in {1,2}. hex/rgba in ArcadeBackground.tsx = 0. --color-track-line, --color-dash and --color-ground-tint = 0 hits. car-aura / car-damage / car-spark / car-color / keyframes pulse = 0 hits outside prose comments."
+    - "V.3 1920 mod {128, 640, 240, 40, 60, 192} = 0 for all six. Speeds 16 < 32 < 76.8 < 192 < 960."
+  deviations:
+    - id: sky-background-size-dropped
+      task_said: "sky backgroundSize 100px -> 128px in the same atomic edit"
+      implemented: "backgroundSize dropped entirely; the sky period is the 1920px tile width itself."
+      authority: >-
+        Once the checkerboard tile became a vertical two-stop gradient, a 128px
+        backgroundSize banded that gradient visibly every 128px. Making the period the
+        tile width is strictly stronger than 128 (1920 is an exact multiple of itself),
+        so the seam invariant holds with a larger margin. Atomicity was preserved: the
+        component was written in a single edit.
+    - id: road-stripe-texture-retired
+      task_said: "repoint the ground tint to --color-scene-road"
+      implemented: "The 40px 1px stripe texture is gone; the road is a uniform --color-scene-road fill."
+      authority: >-
+        The stripe measured 1.02:1 against its own background, which is why 2.6 exists.
+        With edge, rumble and dash layers now carrying all road structure, a uniform fill
+        satisfies translateX(-50%) wrapping at every viewport by construction. The
+        retired 40px period is recorded here so V.3's 1920 mod 40 = 0 is not read as a
+        claim about a texture that no longer exists.
+    - id: edge-lines-dashed-not-solid
+      task_said: "road edge lines, repeating-linear-gradient, off-seam by construction"
+      implemented: "40px runs separated by 20px gaps at the 60px period."
+      authority: >-
+        A fully solid band at 60px has nothing to animate at 960 px/s, which is the
+        dead-animation failure this change exists to remove. 1920 mod 60 = 0 either way.
+    - id: clearance-read-horizontal
+      task_said: >-
+        "23 px clearance" for hills and "72 px" for trees.
+      implemented: "Read as horizontal distance from the tile boundary, not vertical."
+      authority: >-
+        213 - 380/2 = 23 and 120 - 96/2 = 72 match V.3's phrasing 'off-seam read of hills
+        (23 px) and trees (72 px)' exactly. A literal 23px vertical sky slot between
+        hills and treeline would read as a rendering bug.
+    - id: spec-arithmetic-corrected
+      task_said: "1920 mod {128, 640, 240, 40, 60, 192} = {15, 3, 8, 48, 32, 10}"
+      implemented: "Corrected in tasks.md V.3 to 0, with the quotients shown as quotients."
+      authority: >-
+        The numbers were quotients, not remainders: 1920 = 15x128 = 3x640 = 8x240 =
+        48x40 = 32x60 = 10x192. Every period divides 1920 exactly, so the design was
+        right and only the labels were wrong. Left uncorrected, a verifier checking the
+        invariant against V.3 would fail a correct implementation.
+  engineering_notes:
+    - >-
+      PowerShell 5.1 corrupted src/index.css into UTF-16 twice in this session: once via
+      Set-Content -Encoding UTF8 and once via shell redirection of git show. Both
+      presented as 'Invalid declaration: @import "tailwindcss"' with the error text
+      rendered as spaced-out UTF-16 bytes, which is the tell. Recovery is
+      git restore --worktree -- src/index.css, never a shell write.
+    - >-
+      The CRASH PIXELS NEVER GATED ON STATE. BodyPixel accepted damage as a prop and
+      only the isCrashed branch passed it, but the aura div rendered on lives >= 5
+      regardless of crash state and was a full-box 0.6-opacity fill in the body colour.
+      Read the branch conditions before assuming a visual is crash-only.
+  not_done:
+    - "2.9 answer-feedback snapshot and 2.10 the no-glyph visual — not started."
+    - "2.11 question typography — not started."
+    - "2.12 score HUD pixel-panel chip — not started. The score value still uses text-white at 1.95:1 over the new bright sky and remains the legibility defect 2.12 exists to fix."
+    - "2.13 car tier recolour and 2.15 tier-1 legibility — not started. 2.13 is blocked by 2.14."
+    - "2.14 R-4 human sign-off — NOT DISCHARGED. Adjacent tier ratios 1.86 / 1.59 / 1.04 are evidence of risk, not sign-off. A person must confirm at 2x with the app open. Not fabricateable."
+    - "2.16 human sign-off list — NOT DISCHARGED. Same reason. The 23px hill margin and the daylight-not-dusk read both need eyes on the running app."
+    - "R3-2 automated seam regression test — not closable from this project."
+  blocked_on_human:
+    - 2.14
+    - 2.16
+
+art_direction_amendment:
+  date: 2026-10-03
+  by: sdd-spec
+  phase_at_amendment: apply
+  note: >-
+    Mid-change re-plan. The scene art delivered by apply_pr2_scene was reviewed and REJECTED as
+    "simple blocks of color without any detail". The art direction is REPLACED. This is a
+    Phase 0 replanning event, NOT a phase transition: next_phase stays apply, and the phases
+    table above is untouched.
+  trigger: >-
+    The maintainer reviewed the delivered scene and named three references. Enter the Gungeon
+    and middle-generation (Gen-3) Pokemon are both true pixel art and share one technique set.
+    Celeste is the outlier — hand-drawn vector bezier art on no pixel grid — and was RULED OUT
+    as unreachable. The maintainer then chose the Gungeon / Gen-3 pixel-art direction and fixed
+    the sprite resolutions in one pass.
+  ruling: >-
+    Every scene sprite form carries a hard 1px dark outline and a four-tone ramp (base, shadow,
+    light, highlight); every ramp and band transition is Bayer 4x4 ordered dithered; distant
+    layers blend toward the sky token and desaturate, and ATMOSPHERIC DESATURATION IS THE
+    PRIMARY DEPTH CUE — complementary to the parallax speed ladder, not a replacement for it.
+    Every sprite renders with shape-rendering="crispEdges" and image-rendering: pixelated, at
+    its own aspect-matched viewBox.
+  superseded:
+    - >-
+      Flat single-colour sprite fills — the entire premise of the delivered scene art. No flat
+      fill is a conforming value for any scene material.
+    - >-
+      The fixed count of 11 --color-scene-* tokens — replaced by per-material tone ramps,
+      roughly 20 entries including outlines. NOT a rule bend: AGENTS.md hard rule 1 requires a
+      token per colour and a four-tone ramp cannot be expressed without one token per tone, so
+      the ramp widens the NUMBER the rule already demands and changes no part of the rule.
+    - >-
+      Band stacks as a constraint on shape. preserveAspectRatio="none" (ArcadeBackground.tsx:143
+      hills, :202 trees) was the documented reason diagonals were avoided: the fixed 1920px tile
+      keeps horizontal scale at exactly 1:1, while the viewBox is stretched on the vertical axis,
+      which softens every diagonal. Pixel art needs diagonals, so the stretch goes and
+      per-sprite aspect-matched viewBoxes replace it. meet is NOT a safe substitute — it shrinks
+      the horizontal scale too and silently breaks the 1920px tiling.
+  unchanged:
+    - >-
+      NO-RASTER. Art stays hand-authored inline SVG — no image files, no sprite sheet, no new
+      runtime dependency. Pixel art is a technique, not a file format; nothing about the ramp
+      needs a raster asset.
+    - >-
+      All PR2 geometry. Every period, duration, speed, tile width, clearance and paint-order
+      decision stands. The amendment reworks art OUTPUT only, so the parallax arithmetic in V.3
+      is untouched.
+    - "next_phase: apply, and the phases table."
+    - "2.16 and P.14 are separate sign-offs. This amendment discharges neither."
+  resolutions_fixed:
+    car: 32x16
+    tree: 32x48
+    cloud: 48x24
+    sun: "32x32 — stepped octagon with 4 blocky rays; today a <circle>"
+    hills: "3-tone mass with dithered band transitions"
+    grass: "3-tone band with tufts breaking the top edge"
+  verified_against_source:
+    - >-
+      image-rendering: pixelated exists ONLY as an inline style on the car <svg>
+      (CarSprite.tsx:87). No CSS rule in src/ sets it and no scene sprite carries it.
+      shape-rendering appears NOWHERE in src/. Both are work to be done, not existing
+      behaviour — a verifier must not read them as already delivered.
+    - >-
+      src/index.css carries 12 --color-scene-* tokens, not the 11 the delta enumerated.
+      --color-scene-grass #46964f paints the verge and was in no spec list at all; the delta's
+      ramp table now names it.
+    - >-
+      The stale "the namespace does not exist today" claim on tasks.md 2.1 is corrected there.
+  artifacts_updated:
+    - "openspec/design/arcade-retrofit.md — new 'Amendment 2026-10-03' section; the Car sprite approach row is marked amended in its fill discipline only, with NO-RASTER explicitly unchanged."
+    - "openspec/changes/arcade-scene-backdrop/specs/game/spec.md — the palette requirement rewritten to ramp groups with the deviation recorded in place; four requirements added; the header note records the rejected references and the token-count discrepancy."
+    - "openspec/changes/arcade-scene-backdrop/tasks.md — new PR2-A group, tasks P.1 through P.14, all UNCHECKED; 2.1, V.2 and V.5 annotated."
+    - "openspec/changes/arcade-scene-backdrop/state.yaml — this block, plus the spec_revision counts."
+  known_contradictions_not_edited:
+    - >-
+      design.md Decision 4 still fixes the palette at 11 tokens, and its Technical Approach
+      still describes every layer as a gradient or clip-path silhouette while the source draws
+      inline SVG. Both are design-phase artifacts and were left alone deliberately.
+    - >-
+      proposal.md, the delta's own Status header, the PR2 task text and openspec/status.md all
+      describe the scene as unimplemented or proposed-only, while apply_pr2_scene records that
+      it IS implemented. Left for the apply and verify phases.
 
 recovered_from:
   store: engram

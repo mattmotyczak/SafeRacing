@@ -29,6 +29,25 @@
 > and R-8 (the ground tint and road dashes draw from the scene palette). R-9 was resolved by
 > instruction and R-10 is recorded as a pre-existing verify blocker in `state.yaml`.
 >
+> **Amended 2026-10-03 — art direction replaced: flat bands → shaded, dithered pixel art.** The
+> implemented scenery was rejected as "simple blocks of color without any detail". Of the three
+> references the user named, **Enter the Gungeon** and **middle-generation (Gen-3) Pokémon** are
+> both true pixel art sharing one technique set; **Celeste** is the outlier — hand-drawn vector
+> bezier art on no pixel grid — and was **ruled out as unreachable**. The user then chose the
+> Gungeon / Gen-3 pixel-art direction. Consequences in this delta: *The scene palette is a fixed
+> token set* is rewritten from a flat 11-token count to **per-material tone ramps** (a deliberate
+> deviation, recorded in place), and **four requirements are added** — crisp edges, outline
+> presence, dithering at band transitions, and atmospheric desaturation by depth layer. This raises
+> the delta's totals to **24 added requirements** and **43 scenarios**. NO-RASTER is untouched: art
+> hand-authored inline SVG, no image files, no new dependency. Sprite resolutions are fixed and
+> user-approved — car 32×16, tree 32×48, cloud 48×24, sun 32×32 stepped octagon (today a
+> `<circle>`), hills a 3-tone mass, grass 3-tone with tufts. See
+> `openspec/design/arcade-retrofit.md` → *Amendment 2026-10-03* for the rationale, including the
+> `preserveAspectRatio="none"` finding that forced band stacks instead of diagonals.
+> **A discrepancy found while writing this amendment, not worked around:** the previous version of
+> this requirement enumerated **11** scene tokens, but the working tree carries **12** —
+> `--color-scene-grass` `#46964f` paints the verge and is in no list. The ramp table below names it.
+>
 > **Two line-number bases are in use in this file, deliberately.** Citations in the pre-existing
 > text are **HEAD `e26fcf1`**. `src/App.tsx` carries uncommitted working-tree changes (the
 > question-bank extraction into `src/data/questions.*` plus draw-without-replacement) that shift
@@ -735,6 +754,11 @@ The scene is a **bright daytime 16:9 panel inside the existing dark shell** — 
 panel is the only bright thing on the page. These tokens are fixed; no other colours are
 permitted in the scene.
 
+**The set is a set of per-material tone ramps, not a flat list of single colours.** Each
+scene material MUST resolve to a **ramp of four tones — base, shadow, light, highlight** — plus a
+shared outline entry. A flat single-colour fill is no longer a conforming value for any scene
+material: it is the defect this requirement exists to prevent.
+
 **Reused as-is (no new token):**
 
 | Role | Token | Value |
@@ -753,35 +777,244 @@ from the delete list in *Visual token discipline*, which is where the earlier re
 where the parenthetical "becomes live as the sun" sat *inside the list that deleted it* — a
 token cannot be both deleted and be the sun.
 
-**New `--color-scene-*` tokens in `@theme`:**
+**`--color-scene-*` ramp groups in `@theme`:**
 
-| Role | Value |
-|------|-------|
-| sky horizon | `#bfe9ff` |
-| sky top | `#5ec5f5` |
-| clouds | `#ffffff` |
-| far hills | `#4a9e5c` |
-| trees (light) | `#2f7a46` |
-| trees (dark) | `#245f38` |
-| road | `#3a3a48` |
-| rumble red | `#e03a3a` |
-| rumble white | `#f0f0f5` |
-| road dashes | `#e8e8f0` |
-| car body | `#ffc23a` |
+Each group names the **base tone** — the value the previous flat list specified. The remaining
+three tones of every group are additions required by this amendment. The naming convention is
+`--color-scene-<material>-<tone>`, with `base` as the unsuffixed base tone where the token already
+carries a role name (`--color-scene-car-body`, `--color-scene-sky-top`).
 
-Two of these carry live traffic that the earlier revision of this table left pointing at
-dark-scene tokens: `road` and `road dashes` are the fills of the ground-tint and dash layers
-respectively. See *Ground tint and road dashes draw from the scene palette*.
+| Ramp group | Token | Base value | Tones required |
+|---|---|---|---|
+| sky | `--color-scene-sky-horizon` | `#bfe9ff` | horizon + top only — the sky is a **two-stop gradient**, not a shaded form, and is not ramped |
+| sky (cont.) | `--color-scene-sky-top` | `#5ec5f5` | as above |
+| clouds | `--color-scene-clouds` | `#ffffff` | base, shadow, light, highlight |
+| hills | `--color-scene-far-hills` | `#4a9e5c` | base, shadow, light — **3 tones**; the mass is 3-tone per the dithering requirement below |
+| trees | `--color-scene-trees-light` / `--color-scene-trees-dark` | `#2f7a46` / `#245f38` | the two tokens are the **light and shadow** tones of **one** ramp; base and highlight are added |
+| grass | `--color-scene-grass` | `#46964f` | base, shadow, light — **3 tones**; the verge is 3-tone with tufts breaking its top edge |
+| road | `--color-scene-road` | `#3a3a48` | base, shadow, light, highlight |
+| rumble red | `--color-scene-rumble-red` | `#e03a3a` | base, shadow, light, highlight |
+| rumble white | `--color-scene-rumble-white` | `#f0f0f5` | base, shadow, light, highlight |
+| road dashes | `--color-scene-road-dashes` | `#e8e8f0` | base, shadow, light, highlight |
+| car body | `--color-scene-car-body` | `#ffc23a` | base, shadow, light, highlight |
+| sun | `--color-accent-yellow` | `#ffec27` | base, shadow, light, highlight — **reused, not a `--color-scene-*` token** |
+| **outline** | `--color-scene-outline` | a dark tone of the material hue | **one shared entry**; see *Every sprite form carries a hard dark outline* |
+
+Two rows of this table carry live traffic that the earlier revision left pointing at dark-scene
+tokens: `road` and `road dashes` are the fills of the ground-tint and dash layers respectively. See
+*Ground tint and road dashes draw from the scene palette*.
+
+**The grass row is a correction, not an addition.** The previous version of this table listed 11
+tokens and did not include a grass colour at all; `--color-scene-grass` exists in the working tree
+and paints the verge. Since this amendment rebuilds the grass as a **3-tone** band, the material
+needs a ramp, so it is named here rather than left as an unnamed eleventh colour.
+
+**The count is no longer a flat 11 — it is the sum of the ramps above, and it MUST NOT be pinned
+to a number.** Pinning it is what made the previous revision incompatible with shading: a count is
+the wrong shape of constraint for a set whose size is determined by how many materials the scene
+has. The binding constraints are the **per-material tone minimum** (four for a shaded form, three
+for the two 3-tone masses) and the **token discipline** below.
+
+**Deviation from the previous version of this requirement, recorded deliberately.** The previous
+version fixed the palette at **11 flat `--color-scene-*` tokens** and stated that no other colours
+are permitted. This requirement widens that set to roughly **20 ramp entries**. **The rationale is
+that the project rule forces it, not that the rule was bent:** `AGENTS.md` hard rule 1 requires
+every colour in `src/**/*.tsx` to resolve to an `@theme` token or a `var(--color-*)`, and a
+four-tone ramp **cannot be expressed without a token per tone** — there is no shorthand in the rule
+for "this colour, four steps". So the ramp widens the *number* of tokens the rule already demands
+while changing **no** part of the rule itself. **NO-RASTER is unaffected:** the widened palette
+buys more named colours, not more files, and art stays hand-authored inline SVG.
+
+**The `--color-scene-outline` entry is a scene token, not a raw colour**, for the same reason the
+rest of the scene palette is. It MUST NOT be spelled as a hex or an `rgba()` in `src/**/*.tsx`.
 
 #### Scenario: The scene introduces no colour outside the fixed set
 - **GIVEN** any colour in the new scene layers
 - **WHEN** it is resolved
-- **THEN** it is one of the 8 reused tokens or one of the 11 `--color-scene-*` tokens, and no literal hex or `rgba()` appears in `src/**/*.tsx`
+- **THEN** it is one of the 8 reused tokens, one of the `--color-scene-*` ramp entries, or `--color-scene-outline`, and no literal hex or `rgba()` appears in `src/**/*.tsx`
+
+#### Scenario: No scene material is flat-filled
+- **GIVEN** any shaded material in the new scene layers — a tree, a hill, a cloud, the sun, a rumble segment, or the road
+- **WHEN** its fills are read
+- **THEN** it resolves at least three distinct tones of its own ramp — four for a shaded form — and no single colour fills the whole form
 
 **Verify:** grep for hex/`rgba()` (target 0) plus a code read that each scene colour maps to a
-named token — including `ArcadeBackground.tsx:22` and `:25`, whose gradient string literals MUST
-name scene tokens and not retired ones. **Not verifiable in-browser:** whether the panel reads as
-"bright daytime" is a human judgement.
+named token — including the gradient string literals, which MUST name scene tokens and not retired
+ones. For the ramp requirement, a code read that each material names at least three tones from its
+own group; **a token count is not a valid check** and the previous `11` is withdrawn. **Not
+verifiable in-browser:** whether the panel reads as "bright daytime", and whether the ramps read as
+shading rather than as stripes, are human judgements.
+
+(Previously: the palette was fixed at **11 flat `--color-scene-*` tokens** and the scenario's
+count was the check. Both the flat-fill allowance and the count are superseded; the two 3-tone
+masses — hills and grass — are named as such because a 3-tone ramp is the user's stated intent for
+those two, not a shortened version of the 4-tone rule.)
+
+### Requirement: Every scene sprite renders at its own resolution, unscaled and crisp
+
+Every scene sprite MUST declare **its own `viewBox` whose aspect matches the box it is rendered
+into**, so that no sprite is ever stretched by its container, and MUST render with crisp edges:
+`shape-rendering="crispEdges"` on the `<svg>`, in a context carrying `image-rendering: pixelated`.
+
+The resolutions below are fixed and user-approved — "Gungeon-faithful, one pass". **These are the
+sprite's own pixel dimensions**, not the panel size it is laid out at.
+
+| Sprite | Resolution | Construction |
+|---|---|---|
+| **Car** | 32 × 16 px | hero sprite, unchanged count of states |
+| **Tree** | 32 × 48 px | |
+| **Cloud** | 48 × 24 px | |
+| **Sun** | 32 × 32 px | **stepped octagon with 4 blocky rays.** It is a `<circle>` today and MUST be replaced — a smooth circle has no pixel steps and cannot be crisp at any scale |
+| **Hills** | — | a 3-tone mass, not a per-sprite viewBox; band transitions dithered per the requirement below |
+| **Grass** | — | a 3-tone band with **tufts breaking the top edge** |
+
+**`preserveAspectRatio="none"` MUST be removed from the hills and trees SVGs, and MUST NOT be
+replaced with any other stretch.** The two `preserveAspectRatio="none"` declarations are
+`ArcadeBackground.tsx:143` (hills) and `:202` (trees), and they are the documented reason every
+feature is drawn as a stack of vertical-edged column and band rects and never as a polygon: the
+tile is a fixed `w-[1920px]`, so `none` keeps the horizontal scale at exactly 1:1 (and `meet` would
+shrink it too and silently break the 1920 px tiling), but the **viewBox is stretched on the
+vertical axis**, which softens every diagonal and shears every non-integer vertical scale. Pixel
+art requires diagonals — canopies, hill slopes, cloud edges, sun rays — so the stretch must go,
+and the band-stack constraint goes with it.
+
+**The per-sprite viewBox is the replacement, and it is a per-sprite decision precisely because
+each sprite has its own aspect.** Laying a sprite out means choosing a rendered box whose aspect
+equals its `viewBox` aspect; a container that stretches its child to fill is non-conforming.
+
+#### Scenario: No scene sprite is stretched by its container
+- **GIVEN** any scene sprite and the box it is laid out in
+- **WHEN** the two aspects are compared
+- **THEN** they are equal, and the `<svg>` carries no `preserveAspectRatio` value that stretches
+
+#### Scenario: The sun has pixel steps
+- **GIVEN** the sun sprite
+- **WHEN** its geometry is read
+- **THEN** it is a stepped octagon with 4 blocky rays on a 32 × 32 viewBox, and no `<circle>` element
+
+#### Scenario: Scene edges are crisp
+- **GIVEN** any scene sprite
+- **WHEN** its rendering attributes are read
+- **THEN** the `<svg>` carries `shape-rendering="crispEdges"` and the sprite renders with `image-rendering: pixelated`
+
+**Verify:** code read of the six sprites — each `viewBox` matches its declared resolution; grep —
+`preserveAspectRatio` in `src/components/ArcadeBackground.tsx` returns **0**; grep — `<circle` in
+`src/` returns **0** for the scene; grep — `crispEdges` returns a hit for every scene `<svg>`.
+`image-rendering: pixelated` **exists today only as an inline style on the car `<svg>`**
+(`CarSprite.tsx:87`) and must be extended to the scene sprites. **Not verifiable in-browser:** a
+human confirms with the app open that no sprite shows a resampling-softened edge.
+
+### Requirement: Every sprite form carries a hard dark outline
+
+Every sprite form MUST carry a **hard 1 px dark outline** in `var(--color-scene-outline)`, drawn
+around the form's silhouette. The outline is what separates a sprite from the surface behind it,
+and what keeps a silhouette legible when two interior tones of the same ramp sit close together.
+
+The outline MUST be **hard-edged** — a 1 px step, never a soft or blended edge. It is not a
+shadow: the project's only sanctioned shadow remains the `4px 4px 0` hard offset, and an outline
+MUST NOT be implemented as one.
+
+Every scene material MUST therefore resolve the outline entry, so `--color-scene-outline` MUST
+exist as a `--color-scene-*` token (see *The scene palette is a fixed token set*) and MUST NOT be
+spelled as a hex or an `rgba()`.
+
+#### Scenario: Every form separates from its background
+- **GIVEN** any sprite form in the scene
+- **WHEN** its edge is read
+- **THEN** a 1 px dark outline in `var(--color-scene-outline)` runs around the silhouette, and the edge is a hard pixel step rather than a blend
+
+#### Scenario: The outline is a colour, not a literal
+- **GIVEN** the outline is drawn on any sprite
+- **WHEN** its colour is resolved
+- **THEN** it is `var(--color-scene-outline)` and not a hex or an `rgba()`
+
+**Verify:** grep — every scene fill/stroke resolves to a `--color-scene-*` or `--color-*` token;
+`--color-scene-outline` is declared in `@theme`; **no outline is implemented as `filter: drop-shadow`,
+which would blur.** **Not verifiable in-browser:** whether the 1 px outline reads at the panel's
+rendered scale, which is a human judgement.
+
+### Requirement: Every ramp and band transition is Bayer-dithered
+
+Wherever a shading ramp changes tone — inside a sprite, and at the boundary between the **bands**
+that build the hills mass and the grass verge — the transition MUST be rendered as **Bayer 4×4
+ordered dithering**, not as a hard step.
+
+This applies at **three kinds of transition**, and all three MUST be dithered:
+
+1. **Within a sprite** — between adjacent tones of the same ramp (e.g. the tree canopy's base and
+   shadow).
+2. **Between the bands of a mass** — the hills mass is **3-tone** and the grass verge is
+   **3-tone**, and their internal band transitions MUST be dithered. A hard band edge is the flat
+   -art defect this amendment removes.
+3. **At a band's outer edge against the sky** — the hill silhouette and the grass top edge.
+
+The grass verge additionally MUST carry **tufts breaking its top edge**, so the boundary is not a
+single continuous line.
+
+Dithering MUST be expressed with the **Bayer 4×4 ordered matrix**, and MUST be periodic on the
+sprite's own pixel grid. A dither pattern whose period does not divide cleanly into the sprite's
+grid reintroduces the seam class of defect *Every layer's tile width is congruent to 0 modulo its
+own period* governs — the same invariant, one scale down.
+
+#### Scenario: A ramp step reads as a transition, not a seam
+- **GIVEN** any two adjacent tones of the same material ramp
+- **WHEN** the boundary between them is rendered
+- **THEN** it is a Bayer 4×4 ordered dither, and not a single hard edge
+
+#### Scenario: The hills mass is not a set of flat bands
+- **GIVEN** the hills mass
+- **WHEN** its band transitions are read
+- **THEN** each transition is Bayer-dithered, and the mass resolves 3 tones rather than one flat fill per band
+
+#### Scenario: The grass top edge is broken
+- **GIVEN** the grass verge
+- **WHEN** its top edge is read
+- **THEN** tufts interrupt the edge, and the 3-tone band transitions beneath it are Bayer-dithered
+
+**Verify:** code read of each sprite's fill set — a dithered transition is recognisable by more
+than one tone being present in the transition region, and **a dither MUST NOT be greppable as a
+hex `rgba()`**: a tonal value reached by `/opacity` on a token is not a dither and fails this
+requirement. Confirm the Bayer matrix is present in the markup for each transition. **Not
+verifiable in-browser:** whether the dither reads as pixel art rather than as noise is a human
+judgement with the app open.
+
+### Requirement: Distant layers are desaturated toward the sky token
+
+**Atmospheric desaturation is the primary depth cue of this scene.** Every far-plane layer MUST be
+**blended toward the sky token and desaturated**, and every near layer MUST be fully saturated. The
+effect MUST increase monotonically with distance:
+
+```
+hills (furthest)  →  trees  →  ground/grass verge  →  road paint (nearest)
+most desaturated                                    fully saturated
+```
+
+Desaturation MUST be expressed as a **token-resolved colour** — the blend target is the sky token,
+never a literal `rgba()` over the layer. The hard rule that governs this is the same one that
+governs the palette: every colour resolves to an `@theme` token or a `var(--color-*)`.
+
+**This is complementary to the parallax ladder, not a replacement for it.** Both rungs of depth
+remain required and neither substitutes for the other: the speed ladder in *The parallax ladder
+gains two rungs, and the sky is its slowest rung* carries motion depth, and this requirement
+carries tonal depth. A change to one does not discharge the other, and a scene that keeps the
+ladder while dropping desaturation still reads flat.
+
+#### Scenario: Depth reads tonally, not only by speed
+- **GIVEN** the hills layer and the road-dashes layer
+- **WHEN** their colour values are compared
+- **THEN** the hills are measurably closer to the sky token in hue and saturation than the dashes, and both are drawn from the scene palette
+
+#### Scenario: Desaturation does not replace the speed ladder
+- **GIVEN** any two layers on different planes
+- **WHEN** the layer table is checked
+- **THEN** the near plane still has the shorter duration, and the far plane is also desaturated — both cues are present
+
+**Verify:** code read that each far-plane sprite's fills name the desaturated ramp entries, and
+that no layer is desaturated by an inline `rgba()` overlay. The speed-ladder half of the second
+scenario is the existing computed arithmetic — `120 > 60 > 25 > 10 > 2` s. **Not verifiable
+in-browser:** whether the tonal step between planes reads as distance is a human judgement with the
+app open.
+
 
 ### Requirement: The scene renders only while playing
 

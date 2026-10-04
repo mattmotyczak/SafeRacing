@@ -32,11 +32,75 @@ Replace SafeRacing's flat Lucide-icon UI with a pixel-art arcade aesthetic using
 
 | Decision | Options | Tradeoff | Choice |
 |----------|---------|----------|--------|
-| Car sprite approach | (A) Inline SVG rects, (B) External raster sprite, (C) Canvas draw | (A) zero deps/license risk but manual art; (B) asset pipeline needed; (C) breaks DOM pattern | **(A) Inline SVG `<rect>` primitives** — zero risk, consistent with DOM stack |
+| Car sprite approach | (A) Inline SVG rects, (B) External raster sprite, (C) Canvas draw | (A) zero deps/license risk but manual art; (B) asset pipeline needed; (C) breaks DOM pattern | **(A) Inline SVG `<rect>` primitives** — zero risk, consistent with DOM stack. Medium **unchanged**; flat-fill discipline **amended 2026-10-03**, see [Amendment 2026-10-03](#amendment-2026-10-03--scenery-art-flat-fills-superseded-by-shaded-dithered-pixel-art) |
 | Background loop technique | (A) CSS translateX tile-duplicate, (B) Canvas tile loop, (C) JS RAF ticker | (A) proven in codebase, GPU-composited; (B/C) adds complexity and canvas | **(A) CSS translateX** — extends existing `scrollBackground` pattern |
 | Font loading | (A) CSS `@import`, (B) `<link>` in index.html, (C) Self-hosted | (A) simplest, zero build changes; (B) blocks HTML parse; (C) adds asset pipeline | **(A) CSS `@import`** — one line in index.css, CDN fallback built-in |
 | Palette token strategy | (A) Replace all hex with tokens, (B) Tokens + keep traffic-light hex | (A) total consistency; (B) pragmatic — traffic-light colors are semantically distinct | **(B) Tokens + traffic-light exception** — traffic-light `bg-red-500` etc. are intentional, not brand |
 | Component extraction | (A) ArcadeBackground + CarSprite extracted from App.tsx, (B) Keep monolith | (A) testable, typed props, smaller App.tsx; (B) simpler but 524-line monolith | **(A) Extract both** — typed props enable isolated reasoning |
+
+### Amendment 2026-10-03 — scenery art: flat fills superseded by shaded, dithered pixel art
+
+The **Car sprite approach** decision above is **amended in its fill discipline only**. What was
+rejected is the *art*, not the technique: scenery drawn as flat colour bands — single-fill rects
+with no interior detail — reads as simple blocks of colour, and that is no longer the visual
+contract for the scene.
+
+| Part of the decision | Status |
+|---|---|
+| **NO-RASTER** — art is hand-authored inline SVG; no image files, no sprite sheet, no new runtime dependency | **UNCHANGED.** Pixel art does not imply raster assets. The medium stays inline SVG in the DOM, and `AGENTS.md` hard rule 5 still holds. |
+| Scenery is built from flat, single-colour `<rect>` fills | **SUPERSEDED.** Every sprite form now carries a shading ramp, a hard outline, dithered band transitions, and depth desaturation. |
+
+**The technique set that replaces flat fills.** One set, shared by every sprite:
+
+1. **Outline** — a hard 1 px dark outline on every sprite form. It is what separates a sprite from
+   the surface behind it, and what keeps a silhouette legible when the interior tones sit close
+   together.
+2. **Shading ramp** — four tones per material: base, shadow, light, highlight. **No flat
+   single-colour fill anywhere in the scenery.**
+3. **Ordered dithering** — Bayer 4×4 at every ramp and band transition. It is what makes the step
+   between two tones read as a pixel-art transition rather than as a seam.
+4. **Atmospheric desaturation** — distant layers blended toward the sky token and desaturated, near
+   layers fully saturated. This is the **primary depth cue**, and it is complementary to the
+   parallax speed ladder rather than a substitute for it.
+
+**Confirmed sprite resolutions** (user-approved, one pass):
+
+| Sprite | Resolution | Note |
+|---|---|---|
+| Car | 32 × 16 px | |
+| Tree | 32 × 48 px | |
+| Cloud | 48 × 24 px | |
+| Sun | 32 × 32 px | stepped octagon with 4 blocky rays — **today a `<circle>`** |
+| Hills | 3-tone mass | dithered band transitions |
+| Grass | 3-tone | tufts breaking the top edge |
+
+**Palette consequence.** The scene palette grows from **11 flat** `--color-scene-*` tokens to
+roughly **20 ramp entries** — four tones per material plus outlines. `AGENTS.md` hard rule 1
+requires every colour in `src/**/*.tsx` to be a token or a `var(--color-*)`, and a four-tone ramp
+cannot be expressed without a token per tone, so the expansion is **forced by the rule** rather
+than chosen against it. This amendment changes no token discipline; it widens the number of tokens
+the same rule already demands.
+
+**Crisp edges.** Every scene sprite sets `shape-rendering="crispEdges"` and renders in a context
+carrying `image-rendering: pixelated`. **Verified 2026-10-03 against the working tree:**
+`image-rendering: pixelated` exists **only as an inline style on the car `<svg>`**
+(`CarSprite.tsx:87`) — no CSS rule in `src/` sets it, and no scene sprite carries it.
+`shape-rendering` appears **nowhere** in `src/`. Both are therefore work to be done, not existing
+behaviour, and the *Stays* list above should be read as "the technique is retained", not "the
+declaration is already in place on every sprite".
+
+**The `preserveAspectRatio="none"` finding — and why band stacks were chosen instead of polygons.**
+The hills and trees SVGs both set `preserveAspectRatio="none"` (`ArcadeBackground.tsx:143` and
+`:202`). That is deliberate: the tile is a fixed `w-[1920px]`, so the horizontal scale is always
+exactly 1:1 and the tile can never open a gap, whereas `meet` would shrink the horizontal scale too
+and silently break the 1920 px tiling. The cost is that **the viewBox is stretched on the vertical
+axis only**, so any diagonal softens and any non-integer vertical scale shears. That is why every
+feature was drawn as a stack of vertical-edged column and band rects and never as a polygon.
+
+**That constraint is incompatible with pixel art**, which requires diagonals — tree canopies, hill
+slopes, cloud edges, the sun's rays. The fix is **per-sprite viewBoxes whose aspect matches their
+own rendering**, so a sprite is never stretched by its container. That removes the band-stack
+constraint, and with it the reason band stacks were chosen in the first place.
 
 ## Pixel Arcade Palette — Verified WCAG Contrast Ratios (recomputed)
 

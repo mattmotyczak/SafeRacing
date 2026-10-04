@@ -203,7 +203,7 @@ export default function App() {
           } else {
             setStatus('game_over');
           }
-        }, 1500);
+        }, 3500);
       }, 2000); // Crash at 2s
     }
   };
@@ -231,17 +231,17 @@ export default function App() {
       </header>
 
       {/* Main Content: Dashboard */}
-      <main className="flex-grow flex items-center justify-center pt-20 pb-32 px-6 relative z-10">
-        <div className="w-full max-w-[1100px] perspective-1000">
+      <main className="flex flex-col items-center justify-center pt-20 pb-32 px-6 relative z-10 max-h-[calc(100vh-80px)]">
+        <div className="w-full max-w-[1100px] perspective-1000 flex flex-col flex-1 min-h-0">
           <motion.div
-            initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full aspect-video relative pixel-panel game-sector-glow rounded-none overflow-hidden group"
+            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.98, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            className="flex-1 min-h-0 w-full relative pixel-panel game-sector-glow rounded-none overflow-hidden group" style={{ aspectRatio: '16/9' }}
           >
             {/* Infinite Runner View */}
-            {status === 'playing' && (
-              <div className="absolute inset-0 z-0">
+{status === 'playing' && (
+                <div className="absolute inset-0 z-0">
                 {/* Arcade Tiled Background */}
                 <ArcadeBackground isMoving={isMoving} />
 
@@ -261,15 +261,17 @@ export default function App() {
                 <motion.div
                   animate={{
                     y: 0,
-                    rotate: isCrashed ? (prefersReducedMotion ? 0 : [0, 60, 120]) : 0,
-                    x: isCrashed ? (prefersReducedMotion ? 0 : [0, 40]) : 0,
+                    rotate: isCrashed ? (prefersReducedMotion ? 0 : [0, 8, 16, 12, 0]) : 0,
+                    x: isCrashed ? (prefersReducedMotion ? 0 : [0, 8, 16, 12, 8, 0]) : 0,
+                    scale: isCrashed ? (prefersReducedMotion ? 1 : [1, 1.02, 0.98, 1]) : 1,
                     filter: isCrashed ? "brightness(0.5)" : "none"
                   }}
                   transition={{
-                    rotate: { duration: 0.6, ease: "easeIn" },
-                    x: { duration: 0.6, ease: "easeIn" }
+                    rotate: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
+                    x: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
+                    scale: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }
                   }}
-                  className="absolute bottom-1/4 left-1/4 -translate-x-1/2 z-20"
+                  className="absolute bottom-[6%] left-1/4 -translate-x-1/2 z-20"
                 >
                   <div className="relative group">
                     <div className="transition-all duration-700 w-32 h-16">
@@ -283,9 +285,9 @@ export default function App() {
 
                     {isCrashed && (
                       <motion.div
-                        initial={{ opacity: 0, scale: 0 }}
-                        animate={prefersReducedMotion ? { opacity: 1 } : { opacity: [0, 1, 0], scale: [1, 2.5], y: -50 }}
-                        transition={{ repeat: Infinity, duration: 0.5 }}
+                        initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                        animate={prefersReducedMotion ? { opacity: 1 } : { opacity: [0, 1, 0], scale: [0.8, 1.2, 1.5, 2.5], y: [10, 0, -20, -50] }}
+                        transition={{ repeat: Infinity, duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
                         className="absolute -top-10 left-1/2 -translate-x-1/2 flex"
                         aria-hidden
                       >
@@ -297,8 +299,8 @@ export default function App() {
 
                     {isMoving && !isCrashed && (
                       <motion.div
-                        animate={prefersReducedMotion ? { opacity: 1 } : { opacity: [0.5, 1, 0.5], x: [-10, -15, -10] }}
-                        transition={{ repeat: Infinity, duration: 0.1 }}
+                        animate={prefersReducedMotion ? { opacity: 1 } : { opacity: [0.4, 1, 0.6, 0.4], x: [-8, -16, -20, -12], scale: [0.9, 1.1, 0.95, 0.9] }}
+                        transition={{ repeat: Infinity, duration: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
                         className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full flex"
                         aria-hidden
                       >
@@ -394,46 +396,6 @@ export default function App() {
                   </motion.div>
                 )}
 
-                {status === 'playing' && currentQuestion && !isMoving && !isCrashed && (
-                  <motion.div
-                    key="question"
-                    initial={prefersReducedMotion ? false : { opacity: 0, y: 50 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 50 }}
-                    className="absolute bottom-6 left-6 right-6 z-50"
-                  >
-                    <div className="pixel-panel p-6 rounded-none relative overflow-hidden">
-                      <div className="flex flex-col sm:flex-row items-center gap-6">
-                        <div className="flex-grow text-left">
-                          {currentQuestion.photoString && (
-                            <div className="mb-4">
-                              <img
-                                src={`data:image/jpeg;base64,${currentQuestion.photoString}`}
-                                alt="Question reference"
-                                className="max-h-48 border border-overlay-soft object-contain bg-scrim"
-                              />
-                            </div>
-                          )}
-                          <h3 className="text-lg sm:text-xl font-bold text-on-dark mb-4 leading-tight">
-                            {currentQuestion.question}
-                          </h3>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 w-full sm:w-auto min-w-[300px]">
-                          {currentQuestion.options.map((opt, i) => (
-                            <button
-                              key={i}
-                              onClick={() => handleAnswer(i)}
-                              className="pixel-panel p-3 hover:border-primary/40 hover:bg-primary/5 transition-all text-xs font-medium text-on-surface text-center hover:scale-[1.02] active:scale-[0.98]"
-                            >
-                              {opt}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
                 {status === 'game_over' && (
                   <motion.div
                     key="game_over"
@@ -496,17 +458,61 @@ export default function App() {
             {/* Subtle Vignette */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_40%,var(--color-vignette)_100%)] pointer-events-none" />
           </motion.div>
+
+{/* Question card — SIBLING below game panel. mt-6 margin, max-h to prevent overflow. */}
+            <AnimatePresence mode="wait">
+              {status === 'playing' && currentQuestion && !isMoving && !isCrashed && (
+                <motion.div
+                  key="question"
+                  initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.96, y: 32 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.96, y: 32 }}
+                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  className="mt-6 w-full max-w-[1100px] px-6"
+                >
+                  <div className="pixel-panel p-6 rounded-none relative overflow-hidden">
+                    <div className="flex flex-col sm:flex-row items-center gap-6">
+                      <div className="flex-grow text-left">
+                        {currentQuestion.photoString && (
+                          <div className="mb-4">
+                            <img
+                              src={`data:image/jpeg;base64,${currentQuestion.photoString}`}
+                              alt="Question reference"
+                              className="max-h-48 border border-overlay-soft object-contain bg-scrim"
+                            />
+                          </div>
+                        )}
+                        <h3 className="text-lg sm:text-xl font-bold text-on-dark mb-4 leading-tight">
+                          {currentQuestion.question}
+                        </h3>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 w-full sm:w-auto min-w-[300px]">
+                        {currentQuestion.options.map((opt, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleAnswer(i)}
+                            className="pixel-panel p-3 hover:border-primary/40 hover:bg-primary/5 transition-all text-xs font-medium text-on-surface text-center hover:scale-[1.02] active:scale-[0.98]"
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
         </div>
       </main>
 
-      {/* Footer Branding - Shrunk by 60% */}
+      {/* Footer Branding - Bottom left corner */}
       <footer className="fixed bottom-0 left-0 w-full py-6 z-20 pointer-events-none">
-        <div className="max-w-[1280px] mx-auto px-8 flex justify-center">
+        <div className="max-w-[1280px] px-8 flex justify-start">
           <motion.div
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.5, duration: 0.8, ease: "circOut" }}
-            className="pixel-panel p-2.5 flex flex-col items-center justify-center pointer-events-auto min-w-[120px]"
+            className="pixel-panel p-2.5 flex flex-col items-start justify-center pointer-events-auto min-w-[120px]"
           >
             <p className="text-primary font-black tracking-tight text-[10px] sm:text-[12px]">Desarrollado por el Equipo Foxtrot</p>
             <div className="h-px w-8 bg-gradient-to-r from-transparent via-primary/30 to-transparent my-1" />
