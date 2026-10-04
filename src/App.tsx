@@ -3,9 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { motion, AnimatePresence } from "motion/react";
-import { Gamepad2, ShieldCheck, ChevronLeft, Trophy, Flag, AlertTriangle, Car, Zap, Heart } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { Gamepad2, ShieldCheck, ChevronLeft, Trophy, Flag, AlertTriangle } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import ArcadeBackground from "./components/ArcadeBackground";
+import CarSprite from "./components/CarSprite";
+// Offline fallback banks. The online database is the primary source; these keep
+// the game playable when the API is down. The same bank backs both paths, so the
+// option order a player memorises online is not the order they see offline.
+import db_easy from "./data/questions.easy";
+import db_hard from "./data/questions.hard";
 
 type GameStatus = 'menu' | 'mode_selection' | 'playing' | 'game_over';
 
@@ -13,45 +20,10 @@ interface Question {
   question: string;
   options: string[];
   answer: number;
+  photoString?: string | null;
 }
 
-/**
- * SQL Schema Representation for Reference:
- * 
- * CREATE TABLE questions (
- *   id INTEGER PRIMARY KEY AUTOINCREMENT,
- *   mode TEXT CHECK(mode IN ('easy', 'hard')),
- *   question TEXT NOT NULL,
- *   option_1 TEXT NOT NULL,
- *   option_2 TEXT NOT NULL,
- *   option_3 TEXT NOT NULL,
- *   option_4 TEXT NOT NULL,
- *   answer_index INTEGER NOT NULL
- * );
- * 
- * INSERT INTO questions (mode, question, option_1, option_2, option_3, option_4, answer_index) VALUES
- * ('easy', '¿Qué significa la bandera roja?', 'Peligro, detener carrera', 'Última vuelta', 'Entrada a pits', 'Carrera terminada', 0),
- * ('easy', '¿Cuál es el color de la bandera de salida?', 'Roja', 'Verde', 'Cuadros', 'Amarilla', 1),
- * ('easy', '¿Qué debe hacer un piloto ante bandera amarilla?', 'Acelerando', 'Reducir velocidad y no rebasar', 'Ir a pits', 'Detener el auto inmediatamente', 1),
- * ('hard', '¿Cuál es el límite de velocidad en el Pit Lane (estándar)?', '60 km/h', '80 km/h', '100 km/h', '50 km/h', 1),
- * ('hard', '¿Qué sistema permite reducir la carga aerodinámica en rectas?', 'ERS', 'KERS', 'DRS', 'DAS', 2);
- */
-
-const db_easy: Question[] = [
-  { question: "¿Qué significa la bandera roja?", options: ["Peligro, detener carrera", "Última vuelta", "Entrada a pits", "Carrera terminada"], answer: 0 },
-  { question: "¿Cuál es el color de la bandera de salida?", options: ["Roja", "Verde", "Cuadros", "Amarilla"], answer: 1 },
-  { question: "¿Qué debe hacer un piloto ante bandera amarilla?", options: ["Acelerando", "Reducir velocidad y no rebasar", "Ir a pits", "Detener el auto inmediatamente"], answer: 1 },
-  { question: "¿Dónde se detienen los autos para cambiar llantas?", options: ["En la pista", "En el garaje", "En los pits", "En la meta"], answer: 2 },
-  { question: "¿Cuántos pilotos hay en un auto de F1?", options: ["Dos", "Uno", "Cuatro", "Tres"], answer: 1 },
-];
-
-const db_hard: Question[] = [
-  { question: "¿Cuál es el límite de velocidad en el Pit Lane (estándar)?", options: ["60 km/h", "80 km/h", "100 km/h", "50 km/h"], answer: 1 },
-  { question: "¿Qué sistema permite reducir la carga aerodinámica en rectas?", options: ["ERS", "KERS", "DRS", "DAS"], answer: 2 },
-  { question: "¿Cuántos puntos recibe el ganador de un GP?", options: ["20", "15", "25", "10"], answer: 2 },
-  { question: "¿Qué neumático es el más blando en la gama actual?", options: ["C1", "C3", "C5", "C2"], answer: 2 },
-  { question: "¿Quién ostenta el récord de más campeonatos del mundo?", options: ["Hamilton / Schumacher", "Vettel", "Senna", "Prost"], answer: 0 },
-];
+const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
 export default function App() {
   const [status, setStatus] = useState<GameStatus>('menu');
@@ -64,12 +36,94 @@ export default function App() {
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [lightState, setLightState] = useState<'red' | 'yellow' | 'green'>('red');
 
+  // Indices of questions already asked in the current run, used to draw without
+  // replacement. Refs (not state) because the draw must read them synchronously.
+  // lastId additionally guards the lap seam, where askedIds is already reset.
+  const askedIds = useRef<number[]>([]);
+  const lastId = useRef<number>(-1);
+  const [dbEasy, setDbEasy] = useState<Question[]>([]);
+  const [dbHard, setDbHard] = useState<Question[]>([]);
+  const prefersReducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    async function fetchQuestions() {
+      try {
+        const res = await fetch(`${apiBase}/api/questions/easy`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          console.log("✅ Successfully loaded easy questions from NeonDB!", data);
+          setDbEasy(data);
+        } else {
+          console.warn("⚠️ NeonDB returned empty data. Falling back to local db_easy.");
+          setDbEasy(db_easy); // Si la db de neon no tiene preguntas, usa las locales (por si el server falla)
+        }
+      } catch (err) {
+        console.error("❌ Error fetching easy questions (Server might be down). Falling back to local db_easy:", err);
+        setDbEasy(db_easy); // Si falla al cargar las preguntas de neon, usa las locales (por si el server falla)
+      }
+    }
+    fetchQuestions();
+  }, []);
+
+  useEffect(() => {
+    async function fetchQuestions() {
+      try {
+        const res = await fetch(`${apiBase}/api/questions/hard`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          console.log("✅ Successfully loaded hard questions from NeonDB!", data);
+          setDbHard(data);
+        } else {
+          console.warn("⚠️ NeonDB returned empty data. Falling back to local db_hard.");
+          setDbHard(db_hard);
+        }
+      } catch (err) {
+        console.error("❌ Error fetching hard questions (Server might be down). Falling back to local db_hard:", err);
+        setDbHard(db_hard);
+      }
+    }
+    fetchQuestions();
+  }, []);
+
+  // ACA ESTA EL GENERADOR DE PREGUNTAS/RESPUESTAS !!!!!
   const getNewQuestion = useCallback(() => {
-    const db = mode === 'easy' ? db_easy : db_hard;
-    const randomIndex = Math.floor(Math.random() * db.length);
-    setCurrentQuestion(db[randomIndex]);
+    // Use backend data for the current mode when loaded; else fall back to the local bank.
+    const db = mode === 'easy' ? (dbEasy.length > 0 ? dbEasy : db_easy) : (dbHard.length > 0 ? dbHard : db_hard);
+
+    if (db.length === 0) return;
+
+    // Draw without replacement while candidates remain, so a question never
+    // repeats back to back. Once the pool is exhausted, reset it for a new lap
+    // — but still exclude the question just served, or the seam of the lap would
+    // put the same question on screen twice in a row.
+    const exhausted = askedIds.current.length >= db.length;
+    let pool: Question[];
+    if (!exhausted) {
+      pool = db.filter((_, i) => !askedIds.current.includes(i));
+    } else if (db.length > 1) {
+      pool = db.filter((_, i) => i !== lastId.current);
+    } else {
+      pool = db; // single-question bank: nothing left to avoid
+    }
+    if (exhausted) askedIds.current = [];
+
+    const picked = pool[Math.floor(Math.random() * pool.length)];
+    const pickedId = db.indexOf(picked);
+    if (pickedId !== -1 && !askedIds.current.includes(pickedId)) askedIds.current.push(pickedId);
+    lastId.current = pickedId;
+
+    // Shuffle the options so the correct answer is not learnable by position.
+    // Remap `answer` to the new index, otherwise shuffling would silently
+    // mark correct answers wrong.
+    const options = [...picked.options];
+    for (let i = options.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [options[i], options[j]] = [options[j], options[i]];
+    }
+
+    setCurrentQuestion({ ...picked, options, answer: options.indexOf(picked.options[picked.answer]) });
     setLightState('red');
-  }, [mode]);
+  }, [mode, dbEasy, dbHard]);
 
   const startGame = (selectedMode: 'easy' | 'hard') => {
     setMode(selectedMode);
@@ -80,7 +134,9 @@ export default function App() {
     setIsMoving(true);
     setIsCrashed(false);
     setLightState('green');
-    
+    askedIds.current = []; // a new run re-serves the whole bank
+    lastId.current = -1;
+
     // Initial movement
     setTimeout(() => {
       setLightState('yellow');
@@ -100,7 +156,7 @@ export default function App() {
       const nextConsecutive = consecutiveCorrect + 1;
       setConsecutiveCorrect(nextConsecutive);
       setScore(prev => prev + 1);
-      
+
       if (nextConsecutive % 5 === 0 && lives < 5) {
         setLives(prev => prev + 1);
       }
@@ -121,14 +177,14 @@ export default function App() {
       setIsMoving(true);
       setCurrentQuestion(null);
       setLightState('green');
-      
+
       // Crash at 2s
       setTimeout(() => {
         setIsMoving(false);
         setIsCrashed(true);
         setConsecutiveCorrect(0);
         setLightState('red');
-        
+
         const newLives = lives - 1;
         setLives(newLives);
 
@@ -147,7 +203,7 @@ export default function App() {
           } else {
             setStatus('game_over');
           }
-        }, 1500);
+        }, 3500);
       }, 2000); // Crash at 2s
     }
   };
@@ -156,13 +212,16 @@ export default function App() {
     <div className="relative min-h-screen w-full bg-background flex flex-col font-sans selection:bg-primary/20 overflow-x-hidden">
       {/* Background Ambience & Grid */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[150px]" />
-        <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-tertiary/10 rounded-full blur-[150px]" />
-        <div className="absolute inset-0 opacity-[0.03] bg-[linear-gradient(to_right,#888_1px,transparent_1px),linear-gradient(to_bottom,#888_1px,transparent_1px)] bg-[size:40px_40px]" />
+        {/* Hard pixel corner accents (replaces blurred orbs) */}
+        <div className="absolute top-1/4 left-1/4 w-24 h-24 bg-primary/10" />
+        <div className="absolute top-[calc(25%+6rem)] left-[calc(25%+6rem)] w-24 h-24 bg-primary/10" />
+        <div className="absolute bottom-1/4 right-1/4 w-24 h-24 bg-tertiary/10" />
+        <div className="absolute bottom-[calc(25%+6rem)] right-[calc(25%+6rem)] w-24 h-24 bg-tertiary/10" />
+        <div className="absolute inset-0 opacity-[0.03] bg-[linear-gradient(to_right,var(--color-on-surface)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-on-surface)_1px,transparent_1px)] bg-[size:40px_40px]" />
       </div>
 
       {/* Top Navigation Bar */}
-      <header className="fixed top-0 left-0 w-full glass-panel z-50 border-b border-white/5">
+      <header className="fixed top-0 left-0 w-full pixel-panel z-50">
         <div className="flex justify-between items-center px-8 h-16 max-w-[1280px] mx-auto w-full">
           <div className="text-xl font-extrabold tracking-tighter text-primary flex items-center gap-3">
             <ShieldCheck className="w-6 h-6 fill-primary/10" />
@@ -172,135 +231,90 @@ export default function App() {
       </header>
 
       {/* Main Content: Dashboard */}
-      <main className="flex-grow flex items-center justify-center pt-20 pb-32 px-6 relative z-10">
-        <div className="w-full max-w-[1100px] perspective-1000">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full aspect-video relative rounded-2xl border border-white/10 bg-surface-container-lowest/40 backdrop-blur-sm overflow-hidden game-sector-glow group shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]"
+      <main className="flex flex-col items-center justify-center pt-20 pb-32 px-6 relative z-10 max-h-[calc(100vh-80px)]">
+        <div className="w-full max-w-[1100px] perspective-1000 flex flex-col flex-1 min-h-0">
+          <motion.div
+            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.98, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            className="flex-1 min-h-0 w-full relative pixel-panel game-sector-glow rounded-none overflow-hidden group" style={{ aspectRatio: '16/9' }}
           >
             {/* Infinite Runner View */}
-            {status === 'playing' && (
-              <div className="absolute inset-0 z-0">
-                {/* Parallax Background Illusion */}
-                <div className="absolute inset-0 overflow-hidden">
-                  {/* Sky/Distant Background Placeholder */}
-                  <div 
-                    style={{ 
-                      animation: isMoving ? 'scrollBackground 25s linear infinite' : 'none',
-                      animationPlayState: isMoving ? 'running' : 'paused' 
-                    }}
-                    className="absolute inset-0 w-[200%] h-1/2 flex border-b border-white/5 opacity-40"
-                  >
-                    <div className="w-1/2 h-full bg-[linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20),linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20)] bg-[size:100px_100px] bg-[position:0_0,50px_50px] relative">
-                        <span className="absolute top-4 left-4 text-[10px] text-white/10 uppercase">BG-START</span>
-                        <span className="absolute top-4 right-4 text-[10px] text-white/10 uppercase">BG-END</span>
-                    </div>
-                    <div className="w-1/2 h-full bg-[linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20),linear-gradient(45deg,#060e20_25%,transparent_25%,transparent_75%,#060e20_75%,#060e20)] bg-[size:100px_100px] bg-[position:0_0,50px_50px] relative">
-                        <span className="absolute top-4 left-4 text-[10px] text-white/10 uppercase">BG-START</span>
-                        <span className="absolute top-4 right-4 text-[10px] text-white/10 uppercase">BG-END</span>
-                    </div>
-                  </div>
-
-                  {/* Ground/Road Placeholder */}
-                  <div 
-                    style={{ 
-                      animation: isMoving ? 'scrollBackground 10s linear infinite' : 'none',
-                      animationPlayState: isMoving ? 'running' : 'paused'
-                    }}
-                    className="absolute bottom-0 left-0 w-[200%] h-1/2 flex bg-slate-900/20"
-                  >
-                    <div className="w-1/2 h-full border-t border-white/5 relative">
-                        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(142,213,255,0.02)_1px,transparent_1px)] bg-[size:40px_100%]" />
-                        <span className="absolute bottom-4 left-4 text-[10px] text-white/10 uppercase">GROUND-START</span>
-                        <span className="absolute bottom-4 right-4 text-[10px] text-white/10 uppercase">GROUND-END</span>
-                    </div>
-                    <div className="w-1/2 h-full border-t border-white/5 relative">
-                        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(142,213,255,0.02)_1px,transparent_1px)] bg-[size:40px_100%]" />
-                        <span className="absolute bottom-4 left-4 text-[10px] text-white/10 uppercase">GROUND-START</span>
-                        <span className="absolute bottom-4 right-4 text-[10px] text-white/10 uppercase">GROUND-END</span>
-                    </div>
-                  </div>
-                  
-                  {/* Slower Moving Decals or Far road marks */}
-                  <div 
-                    style={{ 
-                      animation: isMoving ? 'scrollBackground 2s linear infinite' : 'none',
-                    }}
-                    className="absolute bottom-1/4 left-0 w-[200%] h-1 flex gap-16"
-                  >
-                    {[...Array(20)].map((_, i) => (
-                      <div key={i} className="w-32 h-full bg-white/5 rounded-full" />
-                    ))}
-                  </div>
-                </div>
+{status === 'playing' && (
+                <div className="absolute inset-0 z-0">
+                {/* Arcade Tiled Background */}
+                <ArcadeBackground isMoving={isMoving} />
 
                 {/* GUI Stoplight */}
                 <div className="absolute top-6 right-6 z-40">
-                  <div className="glass-panel p-2 rounded-xl flex flex-col gap-2 border-white/10 bg-slate-950/80 shadow-2xl">
-                    <div className={`w-8 h-8 rounded-full ${lightState === 'red' ? 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.8)]' : 'bg-red-950/40'}`} />
-                    <div className={`w-8 h-8 rounded-full ${lightState === 'yellow' ? 'bg-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.8)]' : 'bg-yellow-950/40'}`} />
-                    <div className={`w-8 h-8 rounded-full ${lightState === 'green' ? 'bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.8)]' : 'bg-green-950/40'}`} />
+                  <div className="pixel-panel p-2 flex flex-col gap-2">
+                    {/* Lit lamp: shadow-hard, offset geometry from --shadow-hard, hue from
+                        the lamp's own stoplight-lamp-* class. Unlit lamps get no shadow class,
+                        so "lit" carries two independent signals — the fill step and the offset. */}
+                    <div className={`w-8 h-8 rounded-none ${lightState === 'red' ? 'bg-red-500 shadow-hard stoplight-lamp-red' : 'bg-red-950/40'}`} />
+                    <div className={`w-8 h-8 rounded-none ${lightState === 'yellow' ? 'bg-yellow-500 shadow-hard stoplight-lamp-yellow' : 'bg-yellow-950/40'}`} />
+                    <div className={`w-8 h-8 rounded-none ${lightState === 'green' ? 'bg-green-500 shadow-hard stoplight-lamp-green' : 'bg-green-950/40'}`} />
                   </div>
                 </div>
 
-                {/* The Car Placeholder Silhouettes */}
-                <motion.div 
-                  animate={{ 
-                    y: isMoving ? [0, -3, 0] : 0,
-                    rotate: isCrashed ? [0, 60, 120] : 0,
-                    x: isCrashed ? [0, 40] : 0,
-                    filter: isCrashed ? "blur(2px) brightness(0.5)" : "none"
+                {/* The Car — Pixel Grid Sprite */}
+                <motion.div
+                  animate={{
+                    y: 0,
+                    rotate: isCrashed ? (prefersReducedMotion ? 0 : [0, 8, 16, 12, 0]) : 0,
+                    x: isCrashed ? (prefersReducedMotion ? 0 : [0, 8, 16, 12, 8, 0]) : 0,
+                    scale: isCrashed ? (prefersReducedMotion ? 1 : [1, 1.02, 0.98, 1]) : 1,
+                    filter: isCrashed ? "brightness(0.5)" : "none"
                   }}
-                  transition={{ 
-                    y: { repeat: Infinity, duration: 0.3, ease: "easeInOut" },
-                    rotate: { duration: 0.6, ease: "easeIn" },
-                    x: { duration: 0.6, ease: "easeIn" }
+                  transition={{
+                    rotate: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
+                    x: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
+                    scale: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }
                   }}
-                  className="absolute bottom-1/4 left-1/4 -translate-x-1/2 z-20"
+                  className="absolute bottom-[6%] left-1/4 -translate-x-1/2 z-20"
                 >
                   <div className="relative group">
-                    {/* Car Silhouette - Evolves with Lives and Score */}
-                    <div className="transition-all duration-700 flex items-center justify-center">
-                        {lives === 1 && <Car className="w-16 h-16 text-slate-600 drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]" />}
-                        {lives === 2 && <Car className="w-18 h-12 text-primary/80" />}
-                        {lives === 3 && <Car className="w-20 h-14 text-primary" />}
-                        {lives === 4 && <Car className="w-22 h-14 text-sky-300" />}
-                        {lives >= 5 && (
-                          <div className="relative">
-                            <Car className="w-24 h-12 text-yellow-500 scale-x-110" />
-                            <motion.div
-                              animate={{ opacity: [0, 0.5, 0] }}
-                              transition={{ repeat: Infinity, duration: 1 }}
-                              className="absolute inset-0 bg-yellow-400 blur-xl rounded-full"
-                            />
-                          </div>
-                        )}
+                    <div className="transition-all duration-700 w-32 h-16">
+                      <CarSprite
+                        isMoving={isMoving}
+                        isCrashed={isCrashed}
+                        lives={lives}
+                        className="w-full h-full"
+                      />
                     </div>
 
                     {isCrashed && (
-                      <motion.div 
-                        initial={{ opacity: 0, scale: 0 }}
-                        animate={{ opacity: [0, 1, 0], scale: [1, 2.5], y: -50 }}
-                        transition={{ repeat: Infinity, duration: 0.5 }}
-                        className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 bg-slate-400 rounded-full blur-xl"
-                      />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                        animate={prefersReducedMotion ? { opacity: 1 } : { opacity: [0, 1, 0], scale: [0.8, 1.2, 1.5, 2.5], y: [10, 0, -20, -50] }}
+                        transition={{ repeat: Infinity, duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+                        className="absolute -top-10 left-1/2 -translate-x-1/2 flex"
+                        aria-hidden
+                      >
+                        <div className="w-4 h-4 bg-smoke" />
+                        <div className="w-4 h-4 bg-smoke -mt-3 ml-1" />
+                        <div className="w-4 h-4 bg-smoke -mt-1 ml-2" />
+                      </motion.div>
                     )}
 
                     {isMoving && !isCrashed && (
-                      <motion.div 
-                        animate={{ opacity: [0.5, 1, 0.5], x: [-10, -15, -10] }}
-                        transition={{ repeat: Infinity, duration: 0.1 }}
-                        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full w-8 h-4 bg-gradient-to-r from-orange-500 to-transparent blur-sm rounded-full"
-                      />
+                      <motion.div
+                        animate={prefersReducedMotion ? { opacity: 1 } : { opacity: [0.4, 1, 0.6, 0.4], x: [-8, -16, -20, -12], scale: [0.9, 1.1, 0.95, 0.9] }}
+                        transition={{ repeat: Infinity, duration: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
+                        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full flex"
+                        aria-hidden
+                      >
+                        <div className="w-2 h-2 bg-accent-orange" />
+                        <div className="w-2 h-2 bg-accent-red -mt-1" />
+                        <div className="w-2 h-2 bg-accent-orange -mt-2" />
+                      </motion.div>
                     )}
 
                     <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex gap-1">
-                      {[...Array(5)].map((_, i) => (
-                        <Heart 
-                          key={i} 
-                          className={`w-3 h-3 ${i < lives ? 'fill-red-500 text-red-500' : 'text-white/10'}`} 
+                      {Array.from({ length: 5 }, (_, i) => (
+                        <div
+                          key={i}
+                          className={`w-3 h-3 rounded-none ${i < lives ? "bg-red-500" : "bg-overlay-soft"}`}
                         />
                       ))}
                     </div>
@@ -315,24 +329,30 @@ export default function App() {
                 {status === 'menu' && (
                   <motion.div
                     key="menu"
-                    initial={{ opacity: 0, scale: 0.9 }}
+                    initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
+                    exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.9 }}
                     className="flex flex-col items-center"
                   >
                     <motion.div
-                      animate={{ rotate: [0, 5, -5, 0] }}
+                      animate={prefersReducedMotion ? { rotate: 0 } : { rotate: [0, 5, -5, 0] }}
                       transition={{ repeat: Infinity, duration: 4 }}
                       className="mb-8"
                     >
                       <Gamepad2 className="w-24 h-24 text-primary/40" />
                     </motion.div>
-                    <h1 className="text-5xl sm:text-7xl font-black text-white uppercase tracking-tighter mb-8 drop-shadow-2xl">
+                    {/* This heading lost its negative tracking and its soft drop shadow: Press Start 2P
+                        is monospace with no side bearing, so negative tracking collides the
+                        glyphs, and a soft shadow on a heading is a blur. Both were dropped
+                        rather than re-tuned. The utility names are deliberately not spelled
+                        out here so the soft-shadow audit cannot match this note. */}
+                    <h1 className="text-5xl sm:text-7xl font-black text-on-dark uppercase mb-8" style={{ fontFamily: "var(--font-pixel)" }}>
                       SafeRacing
                     </h1>
                     <button
                       onClick={() => setStatus('mode_selection')}
-                      className="px-12 py-4 bg-primary text-on-primary font-black uppercase tracking-[0.2em] rounded-xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(142,213,255,0.4)]"
+                      className="px-12 py-4 bg-primary text-on-primary font-black uppercase tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-hard"
+                      style={{ fontFamily: "var(--font-pixel)", fontSize: "14px" }}
                     >
                       Jugar
                     </button>
@@ -342,33 +362,33 @@ export default function App() {
                 {status === 'mode_selection' && (
                   <motion.div
                     key="select"
-                    initial={{ opacity: 0, x: 20 }}
+                    initial={prefersReducedMotion ? false : { opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
+                    exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, x: -20 }}
                     className="flex flex-col items-center"
                   >
-                    <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight mb-12">
+                    <h2 className="text-3xl sm:text-4xl font-black text-on-dark uppercase mb-12" style={{ fontFamily: "var(--font-pixel)" }}>
                       Seleccione Modalidad
                     </h2>
                     <div className="flex flex-col sm:flex-row gap-6">
                       <button
                         onClick={() => startGame('easy')}
-                        className="glass-panel px-10 py-5 rounded-xl border border-white/10 hover:border-primary/50 hover:bg-primary/10 transition-all flex flex-col items-center gap-3 w-48"
+                        className="pixel-panel px-10 py-5 hover:border-primary/50 hover:bg-primary/10 transition-all flex flex-col items-center gap-3 w-48"
                       >
                         <Flag className="w-8 h-8 text-green-400" />
-                        <span className="font-bold text-white uppercase tracking-widest">Fácil</span>
+                        <span className="font-bold text-on-dark uppercase tracking-widest">Fácil</span>
                       </button>
                       <button
                         onClick={() => startGame('hard')}
-                        className="glass-panel px-10 py-5 rounded-xl border border-white/10 hover:border-red-500/50 hover:bg-red-500/10 transition-all flex flex-col items-center gap-3 w-48"
+                        className="pixel-panel px-10 py-5 hover:border-red-500/50 hover:bg-red-500/10 transition-all flex flex-col items-center gap-3 w-48"
                       >
                         <AlertTriangle className="w-8 h-8 text-red-500" />
-                        <span className="font-bold text-white uppercase tracking-widest">Realista</span>
+                        <span className="font-bold text-on-dark uppercase tracking-widest">Realista</span>
                       </button>
                     </div>
                     <button
                       onClick={() => setStatus('menu')}
-                      className="mt-12 flex items-center gap-2 text-on-surface-variant hover:text-white transition-colors"
+                      className="mt-12 flex items-center gap-2 text-on-surface-variant hover:text-on-dark transition-colors"
                     >
                       <ChevronLeft className="w-5 h-5" />
                       <span className="font-bold uppercase tracking-widest text-sm">Atrás</span>
@@ -376,61 +396,32 @@ export default function App() {
                   </motion.div>
                 )}
 
-                {status === 'playing' && currentQuestion && !isMoving && !isCrashed && (
-                  <motion.div
-                    key="question"
-                    initial={{ opacity: 0, y: 50 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 50 }}
-                    className="absolute bottom-6 left-6 right-6 z-50"
-                  >
-                    <div className="glass-panel p-6 rounded-3xl border-primary/20 shadow-2xl relative overflow-hidden backdrop-blur-3xl ring-1 ring-white/10">
-                      <div className="flex flex-col sm:flex-row items-center gap-6">
-                        <div className="flex-grow text-left">
-                          <h3 className="text-lg sm:text-xl font-bold text-white mb-4 leading-tight">
-                            {currentQuestion.question}
-                          </h3>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 w-full sm:w-auto min-w-[300px]">
-                          {currentQuestion.options.map((opt, i) => (
-                            <button
-                              key={i}
-                              onClick={() => handleAnswer(i)}
-                              className="glass-panel p-3 rounded-xl border border-white/5 hover:border-primary/40 hover:bg-primary/5 transition-all text-xs font-medium text-on-surface text-center hover:scale-[1.02] active:scale-[0.98]"
-                            >
-                              {opt}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
                 {status === 'game_over' && (
                   <motion.div
                     key="game_over"
-                    initial={{ opacity: 0, scale: 0.9 }}
+                    initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     className="flex flex-col items-center"
                   >
-                    <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mb-6 border border-red-500/20">
+                    <div className="w-24 h-24 bg-red-500/10 rounded-none flex items-center justify-center mb-6 border border-red-500/20">
                       <Trophy className="w-12 h-12 text-red-500" />
                     </div>
-                    <h2 className="text-4xl sm:text-6xl font-black text-white uppercase mb-2">¡GAME OVER!</h2>
-                    <p className="text-lg text-primary font-bold uppercase tracking-[0.2em] mb-12">
+                    <h2 className="text-4xl sm:text-6xl font-black text-on-dark uppercase mb-2" style={{ fontFamily: "var(--font-pixel)" }}>¡GAME OVER!</h2>
+                    <p className="text-lg text-primary font-bold uppercase tracking-[0.2em] mb-12" style={{ fontFamily: "var(--font-pixel)", fontSize: "14px" }}>
                       Puntaje Final: {score}
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4">
                       <button
                         onClick={() => startGame(mode)}
-                        className="px-10 py-4 bg-primary text-on-primary font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all"
+                        className="px-10 py-4 bg-primary text-on-primary font-black uppercase tracking-widest hover:scale-105 transition-all"
+                        style={{ fontFamily: "var(--font-pixel)", fontSize: "12px" }}
                       >
                         Reintentar
                       </button>
                       <button
                         onClick={() => setStatus('menu')}
-                        className="px-10 py-4 glass-panel border border-white/10 text-white font-black uppercase tracking-widest rounded-xl hover:bg-white/5 transition-all"
+                        className="px-10 py-4 pixel-panel text-on-dark font-black uppercase tracking-widest hover:bg-overlay-faint transition-all"
+                        style={{ fontFamily: "var(--font-pixel)", fontSize: "12px" }}
                       >
                         Menú
                       </button>
@@ -443,35 +434,85 @@ export default function App() {
             {/* Score HUD */}
             {status === 'playing' && (
               <div className="absolute top-6 left-6 z-40 flex items-center gap-6">
-                 <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-primary/60 tracking-widest mb-1">Score</span>
-                    <span className="text-2xl font-black text-white leading-none">{score}</span>
-                 </div>
-                 <div className="h-10 w-px bg-white/10" />
-                 <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-primary/60 tracking-widest mb-1">Combo</span>
-                    <span className="text-2xl font-black text-primary leading-none">x{consecutiveCorrect}</span>
-                 </div>
+                <div className="flex flex-col">
+                  <span className="text-xs uppercase font-bold text-primary/60 tracking-widest mb-1" style={{ fontFamily: "var(--font-pixel)" }}>Score</span>
+                  {/* The score value is the one named exception to the white-text -> on-dark swap:
+                      it is the only one of the nine whose backing surface is the playing scene,
+                      where it measures 1.95:1 and fails. It becomes legible when the PR2 HUD
+                      chip (tasks.md 2.12) puts a .pixel-panel behind it — tokenising it now
+                      would be a class-name swap dressed up as a fix. The utility names are not
+                      spelled out here so the census cannot match this note. */}
+                  <span className="text-2xl font-black text-white leading-none" style={{ fontFamily: "var(--font-pixel)" }}>{score}</span>
+                </div>
+                <div className="h-10 w-px bg-overlay-soft" />
+                <div className="flex flex-col">
+                  <span className="text-xs uppercase font-bold text-primary/60 tracking-widest mb-1" style={{ fontFamily: "var(--font-pixel)" }}>Combo</span>
+                  <span className="text-2xl font-black text-primary leading-none" style={{ fontFamily: "var(--font-pixel)" }}>x{consecutiveCorrect}</span>
+                </div>
               </div>
             )}
 
             {/* Internal View Scanlines Overlay */}
             <div className="absolute inset-0 scanline opacity-[0.08] pointer-events-none" />
-            
+
             {/* Subtle Vignette */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_40%,rgba(0,0,0,0.4)_100%)] pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_40%,var(--color-vignette)_100%)] pointer-events-none" />
           </motion.div>
+
+{/* Question card — SIBLING below game panel. mt-6 margin, max-h to prevent overflow. */}
+            <AnimatePresence mode="wait">
+              {status === 'playing' && currentQuestion && !isMoving && !isCrashed && (
+                <motion.div
+                  key="question"
+                  initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.96, y: 32 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.96, y: 32 }}
+                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  className="mt-6 w-full max-w-[1100px] px-6"
+                >
+                  <div className="pixel-panel p-6 rounded-none relative overflow-hidden">
+                    <div className="flex flex-col sm:flex-row items-center gap-6">
+                      <div className="flex-grow text-left">
+                        {currentQuestion.photoString && (
+                          <div className="mb-4">
+                            <img
+                              src={`data:image/jpeg;base64,${currentQuestion.photoString}`}
+                              alt="Question reference"
+                              className="max-h-48 border border-overlay-soft object-contain bg-scrim"
+                            />
+                          </div>
+                        )}
+                        <h3 className="text-lg sm:text-xl font-bold text-on-dark mb-4 leading-tight">
+                          {currentQuestion.question}
+                        </h3>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 w-full sm:w-auto min-w-[300px]">
+                        {currentQuestion.options.map((opt, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleAnswer(i)}
+                            className="pixel-panel p-3 hover:border-primary/40 hover:bg-primary/5 transition-all text-xs font-medium text-on-surface text-center hover:scale-[1.02] active:scale-[0.98]"
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
         </div>
       </main>
 
-      {/* Footer Branding - Shrunk by 60% */}
+      {/* Footer Branding - Bottom left corner */}
       <footer className="fixed bottom-0 left-0 w-full py-6 z-20 pointer-events-none">
-        <div className="max-w-[1280px] mx-auto px-8 flex justify-center">
-          <motion.div 
+        <div className="max-w-[1280px] px-8 flex justify-start">
+          <motion.div
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.5, duration: 0.8, ease: "circOut" }}
-            className="glass-panel p-2.5 rounded-lg flex flex-col items-center justify-center border-white/5 shadow-xl backdrop-blur-2xl ring-1 ring-white/5 pointer-events-auto min-w-[120px]"
+            className="pixel-panel p-2.5 flex flex-col items-start justify-center pointer-events-auto min-w-[120px]"
           >
             <p className="text-primary font-black tracking-tight text-[10px] sm:text-[12px]">Desarrollado por el Equipo Foxtrot</p>
             <div className="h-px w-8 bg-gradient-to-r from-transparent via-primary/30 to-transparent my-1" />
@@ -482,7 +523,7 @@ export default function App() {
 
       {/* Global Atmosphere Overlays */}
       <div className="fixed inset-0 pointer-events-none z-[100] scanline opacity-[0.015] mix-blend-overlay" />
-      <div className="fixed inset-0 pointer-events-none z-[99] bg-[radial-gradient(circle_at_center,transparent_0%,rgba(6,14,32,0.4)_100%)]" />
+      <div className="fixed inset-0 pointer-events-none z-[99] bg-[radial-gradient(circle_at_center,transparent_0%,var(--color-atmosphere)_100%)]" />
     </div>
   );
 }

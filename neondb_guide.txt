@@ -1,0 +1,81 @@
+================================================================
+ neondb_guide.txt  —  TOMBSTONE. DO NOT USE AS SCHEMA DOC.
+================================================================
+
+Replaced 2026-09-28. The 124 lines of sample code this file used to
+hold were WRONG, and they were wrong in a way that could silently
+break the data layer. The mistake is recorded below so it is not
+re-invented; the content is not.
+
+
+WHAT IT CLAIMED
+---------------
+A single `questions` table with options stored inline, queried with
+quoted CamelCase identifiers:
+
+    q."idEasyQuestion"   q."photoString"
+    a."idAnswer"         a."relatedToQuestion"
+
+  plus a fetch-and-group helper for an easy-only endpoint.
+
+
+WHY IT IS WRONG
+---------------
+The real schema is FOUR tables - a questions/answers pair per mode,
+related 1:N - created by db/migrations/0001_bootstrap.sql:
+
+    easy_questions  ideasyquestion  question  photostring
+    easy_answers    ideasyanswer    answer    iscorrect
+                                    relatedtoquestion
+    hard_questions  idhardquestion  question  photostring
+    hard_answers    idhardanswer    answer    iscorrect
+                                    relatedtoquestion
+
+Concretely, the old guide was wrong on all three counts:
+
+  1. One table with inline options, not a 1:N questions/answers
+     pair. The old code's own comment admitted the split - "a single
+     question actually has 4 rows of answers" - and then ignored it.
+
+  2. An `idAnswer` column that does not exist. The real column is
+     `ideasyanswer` / `idhardanswer`.
+
+  3. Quoted CamelCase identifiers. Postgres folds UNQUOTED
+     identifiers to lowercase, and every real column in this
+     database is lowercase. Writing them quoted and mixed-case asks
+     for a column Postgres does not have.
+
+
+WAS IT EVER EXECUTED?
+--------------------
+No. Read-only introspection of information_schema on 2026-09-26
+confirmed all sixteen live columns are lowercase, with the types
+above and nextval defaults on both primary keys. The quoted
+CamelCase snippet was never run against this database, so it was
+stale documentation rather than a live hazard.
+
+For the record, had it been executed, the failure would have been
+quiet and nasty: quoted mixed-case identifiers would have created
+SECOND, incompatible tables, and every lowercase query in server.js
+would then fail against the originals.
+
+
+THE ACTUAL SCHEMA
+-----------------
+Read db/migrations/. That is the only schema documentation.
+
+The query contract lives in server.js: MODE_CONFIG (server.js:28-41)
+holds the only identifiers that ever reach SQL text, and
+groupQuestions() (server.js:46-72) reassembles the joined rows into
+{ question, options[], answer, photoString }.
+
+Requirement-level source of truth:
+  openspec/specs/data-layer/spec.md
+Design rationale:
+  openspec/design/backend-data-rigor.md
+
+
+This file is kept at its original path only because seven archived
+change folders reference it. Archived folders are never edited or
+deleted (openspec/config.yaml, rules.archive). Do not add content
+here.

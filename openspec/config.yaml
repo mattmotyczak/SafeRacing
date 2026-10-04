@@ -1,0 +1,138 @@
+# SDD configuration — SafeRacing
+#
+# Artifact store: `openspec` (filesystem). Every SDD phase writes a file under
+# openspec/changes/{change-name}/ and the merged result lands in
+# openspec/specs/{domain}/spec.md. Git history IS the audit trail.
+#
+# This project previously ran with artifact_store=engram. That mode upserts by
+# topic_key, so re-running a phase overwrote the prior version and the only
+# surviving record was a single Engram archive report. All prior artifacts were
+# migrated to files on 2026-09-26; see openspec/changes/archive/.
+#
+# Engram may still be used for AD-HOC memory (bugfixes, discoveries, session
+# summaries). It is NOT the artifact store for SDD phases.
+schema: spec-driven
+artifact_store: openspec
+
+context: |
+  Project: SafeRacing is a Spanish-language DRIVING-SAFETY quiz game for high-school
+  students. "SafeRacing" is a product name, not a description of the content — the game is
+  about driving and road safety, not Formula 1. See the *Purpose* requirement in
+  openspec/specs/game/spec.md.
+  Tech stack: React 19 + Vite 6 + TypeScript (lint = `tsc --noEmit`) + Tailwind v4
+  (@tailwindcss/vite, @theme tokens) + motion + lucide-react frontend; Express 4 + pg +
+  dotenv + cors backend in plain-ESM server.js; Neon Postgres via DATABASE_URL.
+  Architecture: single-page Spanish driving-safety quiz game. src/App.tsx (484 lines) owns a
+  4-state machine (menu | mode_selection | playing | game_over) and two useEffect fetchers,
+  one per mode, against GET /api/questions/:mode. Rendering is pure DOM/CSS + one inline SVG
+  (CarSprite) — no canvas, no RAF, no JS animation loop. ArcadeBackground scrolls three CSS
+  layers; CarSprite is a 64x32 viewBox of <rect> primitives.
+  Data layer: 4 tables (easy_questions/easy_answers, hard_questions/hard_answers) with a
+  questions->answers 1:N relation. server.js maps mode->table via MODE_CONFIG, JOINs, and
+  groups rows in groupQuestions() into one contract for both modes:
+  { question, options[], answer, photoString }. Schema is versioned as
+  db/migrations/NNNN_*.sql applied by db/apply.js. Both modes keep a 5-question hardcoded
+  fallback in App.tsx so the game is playable with no database — deliberate, not dead code.
+  Testing: NO test runner (no test script, no test dependency, no config). Verification is
+  `npx tsc --noEmit` + grep audits + geometry/contrast math written into the artifacts.
+  Style: camelCase identifiers, JSX in .tsx, @/* path alias, ESM ("type": "module"),
+  plain JS in server.js, DB identifiers are lowercase (Postgres folds unquoted names).
+
+# Where everything lives. Root AGENTS.md / ORCHESTRATOR.md / DESIGN.md are pointers to
+# these; they are kept as files because seven archived change folders reference them by
+# path, and config.yaml forbids editing or deleting an archived folder.
+artifact_index:
+  specs: openspec/specs/{domain}/spec.md          # requirement-level source of truth
+  conventions: openspec/conventions.md            # house style, gotchas, read-order
+  status: openspec/status.md                      # current state, open gaps, change flow
+  design: openspec/design/                        # long-lived rationale for shipped arcs
+  change: openspec/changes/{name}/                # active change, per-phase artifacts
+  archive: openspec/changes/archive/YYYY-MM-DD-{name}/
+
+strict_tdd: false
+
+projects:
+  - path: .
+    stack: React 19 + Vite 6 + Tailwind v4 + motion + Express 4 + pg
+    test_command: ""
+    framework: none
+
+domains:
+  - game        # Game loop, state machine, question flow, scoring, visual contract.
+                # Spec: openspec/specs/game/spec.md
+  - data-layer  # Schema, migrations, API contract, offline fallback.
+                # Spec: openspec/specs/data-layer/spec.md
+
+rules:
+  proposal:
+    - Include a rollback plan and success criteria.
+    - Name the domain (game | data-layer) the change touches.
+  specs:
+    - Use Given/When/Then for scenarios.
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY).
+    - A spec requirement that no test can check MUST say so and name its verification
+      method (tsc, grep audit, computed contrast ratio, or geometry audit).
+  design:
+    - Document architecture decisions with rationale and tradeoffs.
+    - For any CSS translateX seamless loop, state the periodicity constraint: the pan
+      distance MUST be congruent to 0 modulo the layer's period, at EVERY viewport width.
+  tasks:
+    - Group by deliverable; keep tasks completable in one session.
+  apply:
+    guidelines:
+      - Follow existing code patterns (camelCase, ESM, plain JS in server.js).
+      - Never introduce a hardcoded hex or rgba() in src/**/*.tsx — use a @theme token.
+        The only permitted exceptions are the traffic-light utilities (bg-red-500,
+        bg-yellow-500, bg-green-500 and their /opacity variants).
+      - Never add a runtime dependency without recording the tradeoff in design.md.
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    typecheck_command: "npx tsc --noEmit"
+    build_command: "npm run build"
+    coverage_threshold: 0
+    audits:
+      - "npx tsc --noEmit must exit 0"
+      - "grep for hardcoded hex/rgba in src/**/*.tsx must return only the traffic-light exception"
+      - "grep for backdrop-blur, blur(, blur- must return 0 outside the DEBUG-DELETABLE block"
+      - "grep for rounded-* other than rounded-none must return 0"
+      # FRAMING AUDIT — see openspec/status.md gaps 7 and 8, and the Purpose requirement in
+      # openspec/specs/game/spec.md.
+      #
+      # PATTERN (must include the SPANISH strings):
+      #   universit|universidad|Equipo Foxtrot|Proyecto Final|Team Foxtrot|Formula 1|Grand Prix
+      # The English-only version shipped in this file on 2026-09-28 missed a live BLOCKER: the
+      # in-game footer renders "Equipo Foxtrot" and "Proyecto Final" to every player.
+      # Grepping only `Team Foxtrot` cannot see Spanish. Do not drop the Spanish alternatives.
+      #
+      # Do NOT add a bare `F1` alternative — it false-positives on hex #fff1e8 and commit
+      # hash e26fcf1. This audit also does NOT catch the F1-themed seed data (Spanish
+      # question text says "F1"); that is gap 7.
+      #
+      # TWO CHECKS, run over all *.md/*.tsx/*.ts/*.css/*.js/*.sql/*.yaml (exclude node_modules):
+      #
+      #   (a) DOCS CHECK — hits are ALLOWED only in these files, and only where the hit is a
+      #       prohibition note, a correction note, or the Purpose requirement itself. Read the
+      #       hit: a hit that ASSERTS the old framing fails even in an allowlisted file.
+      #         AGENTS.md                          naming prohibition
+      #         ORCHESTRATOR.md                   correction note
+      #         README.md                          naming note + current-gap warning
+      #         openspec/conventions.md            naming prohibition
+      #         openspec/config.yaml               context block + this audit's own text
+      #         openspec/specs/game/spec.md        the Purpose requirement
+      #         openspec/status.md                 gaps 7 and 8, plus migration provenance
+      #       Allowlist is FILE-level on purpose. Line numbers are not stable here: editing
+      #       this comment shifts the line numbers of the lines that name them.
+      #
+      #   (b) CODE CHECK — hits in src/, server.js, db/ must be ZERO. This is the one that
+      #       currently FAILS, at src/App.tsx:497,499 (the in-game footer). Line numbers are
+      #       cited here because a code hit is a violation, not an allowlisted note.
+      - "framing docs check: hits only in the allowlisted files above, and only as correction notes"
+      - "framing code check: 0 hits in src/, server.js, db/ -- CURRENTLY FAILS, see openspec/status.md gap 8 (src/App.tsx:497,499)"
+  archive:
+    - Warn before merging destructive deltas.
+    - Move the change folder to openspec/changes/archive/YYYY-MM-DD-{change-name}/; never
+      edit or delete an archived folder. Archived folders reference the root AGENTS.md,
+      DESIGN.md, ORCHESTRATOR.md, README.md and neondb_guide.txt by path — those files stay
+      as pointers and must never be deleted.

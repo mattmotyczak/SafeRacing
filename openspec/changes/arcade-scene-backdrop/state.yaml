@@ -1,0 +1,513 @@
+change: arcade-scene-backdrop
+terminal_state: specced
+schema: spec-driven
+artifact_store: openspec
+project: saferacing
+opened: 2026-09-01
+implemented: 2026-10-02-partial-pr1-partial-pr2-scene
+phases:
+  explore: done
+  propose: done
+  spec: done
+  design: done
+  tasks: done
+  apply: in-progress
+  verify: pending
+  review: pending
+  archive: pending
+artifacts:
+  exploration: exploration.md
+  proposal: proposal.md
+  spec: specs/game/spec.md
+  design: openspec/changes/arcade-scene-backdrop/design.md
+  tasks: openspec/changes/arcade-scene-backdrop/tasks.md
+depends_on: []
+blocks: []
+closes_gaps: [R2-1, R2-2, R2-3, R3-2-partial, R4-1, AURA-MOTION-REDUCE, ANIMATE-PRESENCE-REDUCE]
+spec_revision:
+  date: 2026-09-28
+  by: sdd-spec
+  trigger: >-
+    Two passes. (1) A 12-question design interview: the first delta predated it and asserted
+    several claims the interview settled differently or that proved false. (2) An adversarial
+    re-verification of the post-interview revision, which found a DEPTH-ORDER INVERSION in the
+    parallax table and three further defects. The affected requirements were rewritten, not
+    patched around.
+  reversed:
+    - "Out-of-game dimmed backdrop — rejected; background stays gated behind status === 'playing'"
+    - "Question heading in Press Start 2P — reversed; body prose in Manrope"
+    - "Answer feedback glyph — rejected; border + hard offset, no glyph"
+    - "Car rx removal — corrected to the 4-unit grid (rx=0 or rx=4), not deleted"
+    - "w-1/2 tile justification — withdrawn as mathematically false"
+    - "Sky duration 25s -> 120s — the post-interview table had the sky at 76.8 px/s BEHIND hills at 32 px/s, a 2.4x depth-order inversion. The sky is now 16 px/s, exactly half the hills."
+    - "Ladder is a FIFTH rung, not a fourth — two rungs added (60s hills, 120s sky), not one"
+    - "Tree count per tile 4 -> 8 — 1920/240 = 8 periods fit; the old verify (840+120=960<1920) proved dead space, not off-seam clearance"
+    - "Hills off-seam claim — positions kept, but a 380px max width was ADDED; without it the off-seam claim was unfalsifiable"
+  live_bugs_found:
+    - "ground layer: period 40px on w-1/2 tiles, 1100 mod 40 = 20 -> half-spacing compression. SEVERITY CORRECTED: isMoving runs 3s (App.tsx:111-122), so the A/B boundary advances only 0.3 of a cycle (330px) and then PARKS at screen x=770px for the whole question period (panel gated on !isMoving at App.tsx:364). A static mid-panel artefact, not a transient 10s sweep. SHIPS IN PR1 (pure class swap)."
+    - "sky layer: period 100px, 1920 mod 100 = 20 -> the period itself must change to 128px; a geometry-only fix is impossible. SHIPS IN PR2, atomic with the period, the duration, and the redraw."
+    - >-
+      ASYMMETRY, corrected 2026-09-28 by the R-6 ruling — these are NOT the same bug observed
+      twice, and were previously framed as if they were. GROUND (period 40) is a LIVE BUG at
+      1100px (1100 mod 40 = 20) and happens to be CLEAN at 720px (720 mod 40 = 0): a
+      flagship-layout design-consistency failure. SKY (period 100) is CLEAN at 1100px
+      (1100 mod 100 = 0) and SEAMS at 1024, 976, 852, 768, 720, 540 and 414: a responsive
+      failure, invisible on desktop and broken on every tablet and phone. One unverified
+      W mod period invariant failed differently in two places. The pre-change arcade-retrofit.md
+      record claimed both were safe at 1100px — the sky by arithmetic luck and never checked
+      elsewhere, the ground on a visual "sub-visible at alpha 0.04" claim used to stand in for an
+      arithmetic claim that was false.
+  atomic_coupling:
+    finding: >-
+      The 128px sky period is valid ONLY on fixed 1920px tiles. 1920 mod 128 = 0, but on a
+      w-1/2 tile at the project's own max-w-[1100px] panel width, 1100 mod 128 = 76 — a WORSE
+      phase error than the 100px period produced, and not fixable by geometry alone. The period
+      change and the w-1/2 -> w-[1920px] tile migration are therefore ONE atomic change. Landing
+      one without the other leaves the sky broken.
+    status: recorded in the delta spec (Background scroll layers, and Every layer's tile width is congruent to 0 modulo its own period)
+  census_note: >-
+    A RAW line grep for `arcade-scroll` is NOT a valid guard — it returns 11 lines today
+    (4 definition blocks + 3 prefers-reduced-motion entries + 1 JSX ternary + 3 className
+    usages) and grows with every layer, so any number pinned to it will fail a correct
+    implementation. Count DEFINITION BLOCKS instead: `.arcade-scroll-<name> {` in
+    src/index.css returns 4 today — sky, ground, dashes (3 parallax layers) plus
+    .arcade-scroll-running (a play-state toggle, NOT a layer) — and MUST return 8 after
+    PR2, which adds hills, trees, edges, rumble (7 layers + 1 state toggle).
+    .arcade-scroll-running MUST NOT receive a prefers-reduced-motion entry; it carries
+    play state, not animation. Each of the 7 layers needs exactly one reduced-motion entry.
+  new_requirements: 24
+  modified_requirements: 6
+  removed_requirements: 0
+  scenarios: 43
+  counts_revised: >-
+    2026-10-03. Raised from 20/32 by the art-direction amendment below: 4 requirements added
+    (per-sprite crisp edges and resolutions, outline presence, Bayer dithering at band
+    transitions, atmospheric desaturation by depth layer) and 11 scenarios added. The original
+    2026-09-28 counts are the counts of that revision.
+  verification_model: >-
+    No test runner, no browser tooling, no test dependency. npm run lint (tsc --noEmit) is the
+    only automated gate. Everything else is grep audit, code read, or computed geometry, plus
+    human visual sign-off with the app open. R3-2 (automated seam regression test) remains open
+    and cannot be closed from this project.
+scope_extended:
+  date: 2026-09-28
+  by: user
+  from: background only
+  to: background, car sprite, stoplight, question/answer bubble
+  note: >-
+    The original proposal excluded the car sprite by name. The user extended the change
+    into a general UI/UX revision across all four surfaces. Writing the spec surfaced
+    three live contract violations that no existing check covers — the stoplight's 15px
+    soft glow shadows (App.tsx:226-228), shadow-lg on the question photo (App.tsx:380),
+    and the un-gated AnimatePresence entrance transitions. All three are folded into
+    scope because each sits inside a surface this pass already rewrites.
+design_debt:
+  - id: parallax-rung-60s
+    rule: AGENTS.md hard rule 5
+    owed_by: design
+    status: discharged
+    discharged_in: "openspec/changes/arcade-scene-backdrop/design.md#debt-1--the-60-s-rung-parallax-rung-60s — 'Design-debt discharge > Debt 1 - the 60 s rung', which carries the decision, four rejected alternatives (existing rung / parallel far-plane scale / static hills / 40-45s intermediate) and three costs; summarised in design.md#design-debt-closure"
+    note: >-
+      The 25s / 10s / 2s parallax rungs are all consumed, so a rung at 60s was added for the
+      hills. This is a new duration on an existing ladder and pushes against a project posture,
+      so it MUST be recorded in openspec/changes/arcade-scene-backdrop/design.md with the
+      options considered and rejected. DONE.
+  - id: parallax-rung-120s-sky
+    rule: AGENTS.md hard rule 5
+    owed_by: design
+    status: discharged
+    discharged_in: "openspec/changes/arcade-scene-backdrop/design.md#debt-2--the-120-s-rung-parallax-rung-120s-sky — 'Design-debt discharge > Debt 2 - the 120 s rung', which carries the decision, four rejected alternatives (25 s, shared 60 s, the 'non-figurative gradient' defence, static) and two costs; summarised in design.md#design-debt-closure"
+    note: >-
+      The sky is slowed 4.8x from its shipped 25s to 120s, which puts it at 16 px/s — exactly
+      half the hills. This is a SECOND deliberate tradeoff, discovered by the adversarial
+      re-verification, and owes its own design.md entry naming the option considered and
+      rejected. A shared 60s rung was rejected because it puts sky and hills at identical speed
+      with one behind the other (fused plane, zero relative motion); a 100px-period sky was
+      rejected as a motion-salient repetitive grating. sdd-spec deliberately did NOT create
+      design.md — the design phase owns that file. DONE — see discharged_in.
+
+reconciliation:
+  date: 2026-09-28
+  by: sdd-spec
+  trigger: >-
+    The design phase validated the delta against source and raised 10 self-contradictions in
+    design.md -> Reconciliation ledger (R-1..R-10). The orchestrator ruled on all ten; this pass
+    applies the rulings to specs/game/spec.md. Rulings, not options.
+  ledger: openspec/changes/arcade-scene-backdrop/design.md#reconciliation-ledger
+  applied:
+    - id: R-1
+      ruling: "delete 11, not 12; retain --color-on-dark; retain --color-accent-yellow as the sun; the parenthetical is removed from the delete list and the reuse table is the token's only mention"
+      applied_to: "Visual token discipline (subtraction block + the 11 enumerated), The scene palette is a fixed token set (sun row), the scenario's 12 -> 11"
+    - id: R-2
+      ruling: "score HUD gets the same pixel-panel chip the stoplight has; the 9-site blanket claim is replaced by a per-site mapping naming the score value as the exception"
+      applied_to: "Visual token discipline (per-site mapping table), NEW requirement 'The score HUD carries a pixel-panel chip' (2 scenarios)"
+    - id: R-3
+      ruling: "widen the table to all 17 white/black utilities; do not tokenise three of seven on an arbitrary basis; state the sanctioning rationale once for the group"
+      applied_to: "Visual token discipline (17-row table, all-or-none rationale stated once, and the non-white/non-tsx groups listed separately so no blended total can recur)"
+    - id: R-4
+      ruling: "--color-scene-car-body REPLACES --color-car-tier5 (1.05:1 apart, same colour); state the remaining legibility obligation and name it a human sign-off item"
+      applied_to: "Car sprite states and lives-based recoloring (rewritten; 4+1 rung table; --color-car-tier5 deleted; new scenario; 2x legibility obligation + human sign-off), Visual token discipline (the retired/replaced group)"
+    - id: R-5
+      ruling: "keep translateX(-50%); four tiles in w-[7680px] = 3840 px of pan = 2 tiles; 3840 divides all six periods; NO keyframe change is needed"
+      applied_to: "Layer coverage is bounded and the bound is recorded (the 'pan -25%' claim is withdrawn and the correction shown)"
+    - id: R-6
+      ruling: "ground seam -> PR1, sky period + tile migration -> PR2; add the verified distinction; correct the 'two live bugs exist today' framing"
+      applied_to: "Every layer's tile width is congruent to 0 modulo its own period (asymmetry table, one-invariant-two-failures paragraph, PR1/PR2 per row, sky rewritten as 'clean today at 1100 px'), The change ships as two chained pull requests, Decisions reversed -> Sky period, live_bugs_found in this file"
+    - id: R-7
+      ruling: "delete the (was 30 s) and (was 1.2 s) annotations; they cite superseded drafts of the delta, not shipped code"
+      applied_to: "Background scroll layers (both annotations removed, plus the (Previously:) line that repeated the same fiction), Decisions reversed -> Tree duration and Edge-line duration"
+    - id: R-8
+      ruling: "ground tint and road dashes draw from --color-scene-road and --color-scene-road-dashes (9.17:1), not the legacy dark-scene tokens; move --color-track-line and --color-dash into the dead-token list; add a requirement with the computed contrast as its verification"
+      applied_to: "NEW requirement 'Ground tint and road dashes draw from the scene palette' (2 scenarios, 1.02/1.06/9.17:1 recorded), Visual token discipline (the two 'retired live' tokens kept separate from the 11), The scene palette is a fixed token set"
+  resolved_by_instruction:
+    - id: R-9
+      note: >-
+        proposal.md and exploration.md each carry a third and fourth layer table. NOT EDITED —
+        resolved by instruction. The delta's header states those tables are superseded and MUST
+        NOT be implemented, and tracked_gaps -> proposal-and-exploration-layer-tables records it.
+  deferred:
+    - id: R-10
+      ruling: "out of scope; record as a PRE-EXISTING verify blocker this change does not clear"
+      note: >-
+        The framing audit's CODE CHECK fails at src/App.tsx:497,499 (the in-game footer renders
+        "Equipo Foxtrot" / "Proyecto Final"). It fails identically before and after this change.
+        sdd-verify for this change WILL FAIL that audit. That is expected and pre-existing, not
+        a regression from this work. See pre_existing_blockers below.
+  not_in_ruling:
+    - >-
+      Two line-number bases now coexist in the delta and are labelled as such: pre-existing
+      citations are HEAD e26fcf1, citations introduced by this amendment are marked "working
+      tree" and carry the +25 shift from uncommitted App.tsx work. The delta header states this so
+      a reader never compares a HEAD number to a working-tree number.
+
+design_reconciliation:
+  date: 2026-09-29
+  by: sdd-design
+  note: >-
+    design.md was reconciled against the R-1..R-10 rulings on 2026-09-29. Four pre-ruling
+    statements that had become false were corrected: the dead-token delete count (13 -> 11,
+    with the subtraction shown checkably, R-1), the blanket text-white claim (replaced by the
+    delta's per-site mapping with the score HUD at App.tsx:469 carved out as a pixel-panel
+    chip, R-2), the blended colour-utility total (replaced by three separate subtotals,
+    17 / 1 / 5, R-3), and the body-text token pairing (--color-on-surface #c2c8d0, not
+    --color-on-dark #fff1e8). The nine architecture decisions and the two discharged design
+    debts are unchanged. Two items are recorded, not solved: R-4's 2x tier-legibility
+    obligation for tiers 1-4 against --color-scene-car-body #ffc23a remains UNVERIFIED and
+    is a blocking precondition on the car-recolour task, because no ratio was supplied with
+    the ruling; and content anchors are authoritative while bare line numbers are not, as two
+    bases coexist and HEAD has moved to 453b542 without touching src/App.tsx or
+    src/index.css.
+
+pre_existing_blockers:
+  note: >-
+    Failures that sdd-verify will report and that this change does NOT cause and does NOT clear.
+    Listed so a verify-phase FAIL is not misread as a regression. None of these is in
+    closes_gaps, because closing one is not this change's job.
+  items:
+    - id: framing-audit-code-check
+      file: src/App.tsx
+      lines: [497, 499]
+      found: pre-existing
+      detail: >-
+        openspec/config.yaml -> rules.verify.audits FRAMING AUDIT code check requires 0 hits in
+        src/, server.js, db/ for the pattern universit|universidad|Equipo Foxtrot|Proyecto
+        Final|Team Foxtrot|Formula 1|Grand Prix. The in-game footer renders "Desarrollado por el
+        Equipo Foxtrot" (:497) and "Proyecto Final" (:499) to every player. This is openspec/
+        status.md gap 8 and is a BLOCKER in the base spec.
+      status: fails-identically-before-and-after
+      why_not_this_change: >-
+        Rewriting a credit line is an authorship decision for the team, not an agent's
+        judgement — deleting "Equipo Foxtrot" strips a name from work the team did. Explicitly
+        out of scope per the delta's Out of scope section, and recorded there so the verify
+        result is read correctly.
+      expected_verify_outcome: FAIL on this audit, with the failure annotated as pre-existing
+tracked_gaps:
+  note: >-
+    Drift found by the 2026-09-28 adversarial re-verification, recorded rather than erased. These
+    are deliberately NOT listed in closes_gaps: a gap belongs there only when this change
+    actually closes it, and "correcting a false claim in a design record" is not a product gap.
+  items:
+    - id: retrofit-doc-rgba-count
+      file: openspec/design/arcade-retrofit.md
+      found: 2026-09-28
+      claim: "6 App.tsx rgba shadow/vignette sites to tokenize"
+      actual: "the rgba/# audit over src/**/*.tsx returns 3 lines, all App.tsx:226-228, and all three are the stoplight glows"
+      status: fixed-in-this-pass
+      species: same-as-the-false-provenance-claim — an unverified count in a design record presented as measured
+    - id: retrofit-doc-glow-scope
+      file: openspec/design/arcade-retrofit.md
+      claim: "the traffic-light colour exception is listed under 'Stays' without distinguishing the three sanctioned bg-*-500 utilities from the three 15px glow shadows"
+      actual: "the utilities ARE sanctioned (AGENTS.md hard rule 1); the glow shadows were never in scope, and the same document's Changes list says 'Glow box-shadows become hard offset shadows'"
+      status: fixed-in-this-pass
+      species: two unrelated claims sharing one row
+    - id: retrofit-doc-audit-tolerance
+      file: openspec/design/arcade-retrofit.md
+      claim: "the blur/rounded audit tolerates 'documented stoplight/traffic exceptions'"
+      actual: "the glows are documented as an exception nowhere; the only authority that named them was base-spec text carrying false provenance"
+      status: fixed-in-this-pass
+      species: tolerance language with no backing authority
+    - id: proposal-and-exploration-layer-tables
+      file: openspec/changes/arcade-scene-backdrop/{proposal.md,exploration.md}
+      claim: "each carries a full layer table with periods and durations"
+      actual: "a third table set (hills 240px/18s, mid 480px/10s, sky 1920px/25s), contradicting the delta's canonical table"
+      status: left-in-place-by-instruction
+      note: >-
+        Not edited this pass — out of scope by instruction. The delta's header states that its
+        own table is the single source of truth and that those two tables are superseded and
+        MUST NOT be implemented. Still dirty for the design phase to reconcile.
+next_phase: apply
+
+apply_pr1:
+  date: 2026-10-02
+  by: sdd-apply
+  scope: "PR1 only — tasks 1.1 through 1.17. Contract compliance and provenance; no layer count, period, duration or composition change. PR2 (2.1-2.16) NOT started."
+  outcome: "All 17 PR1 tasks implemented. 152 changed lines across 4 source files."
+  changed_files:
+    src/index.css: "73+/16- — --shadow-hard token; 11 dead tokens deleted; false 'Legacy tokens' comment deleted; 4 overlay/divider roles, 1 ground tint, 5 scanline stops, 3 lamp-shadow hues added; 3 hard-offset sites collapsed onto var(--shadow-hard); .car-aura now reads var(--car-color); blur removal note."
+    src/App.tsx: "37+/23- — 3 stoplight glows to hard offsets with per-lamp hue; drop-shadow and shadow-lg deleted; 2 pixel-font negative-tracking classes deleted; 8 of 9 text-white sites tokenised; 5 non-text white/black utilities tokenised; Jugar shadow onto shadow-hard; 5 entrance animations gated on prefersReducedMotion."
+    src/components/ArcadeBackground.tsx: "19+/12- — ground container w-[200%] to w-[3840px] and both tiles to w-[1920px] (pure class swap); redundant dash backgroundSize/backgroundRepeat deleted; 3 border-white/5 and 1 bg-slate-900/20 tokenised."
+    src/components/CarSprite.tsx: "23+/13- — 8 rx values moved onto the 4-unit grid; --car-color moved from the svg to the wrapper so .car-aura can read it; motion-reduce:animate-none added to the aura."
+  verification:
+    - "V.1 npx tsc --noEmit exits 0. Also npm run build exits 0."
+    - "V.2 hex/rgba in src/**/*.tsx = 0 (was 3). Offset literal in src/ = exactly 1, inside --shadow-hard. blur = 0. rounded-* other than rounded-none = 0. rx= = 8, ry= = 0. var(--car-color) readers = 1. raw white/black/slate opacity utilities = 0. .arcade-scroll definition blocks = 4, unchanged for PR1."
+    - "V.3 ground: pan 1920px, period 40px, 1920 mod 40 = 0 (= 48 periods) at every viewport width; speed 192 px/s; coverage 3840 >= 1100; the parked A/B boundary rests at screen x = 1344, outside the 1100px panel. Superseded tile was w-1/2, where 1100 mod 40 = 20 (seam) and 720 mod 40 = 0 (clean) — the asymmetry the delta records."
+    - "Build-output inspection: all 10 new utilities and all 14 new custom properties are emitted in dist/assets/index-*.css, and .car-aura resolves var(--car-color). This closes the gap greps cannot: an undefined token emits no CSS and would fail silently."
+  deviations_from_launch_summary:
+    - id: score-value-colour
+      launch_summary_said: "text-white x9 replaced by the on-dark token"
+      implemented: "8 of 9 replaced. App.tsx score value keeps text-white, with a code comment naming it the exception."
+      authority: "tasks.md 1.10 and the delta's per-site mapping table both exclude the score value from this change; its backing surface is the new playing scene, where on-dark measures 1.76:1 and #ffffff 1.95:1, both failing. It becomes legible only once tasks.md 2.12 puts a .pixel-panel HUD chip behind it."
+    - id: reduced-motion-gate-count
+      launch_summary_said: "gate the 6 ungated entrance animations"
+      implemented: "5 gated — stage wrapper, menu, mode-select, question panel, game over. The footer wrapper was NOT gated."
+      authority: "The run instructions forbid editing src/App.tsx:488-502, which contains the footer motion.div. tasks.md 1.17 names that wrapper as the 6th."
+    - id: stoplight-in-pr1
+      delta_said: "'the stoplight lamp' is PR2 visual work"
+      implemented: "The lamp contract lands in PR1 — lit lamp takes a hard offset in a darkened shade of its own hue, unlit lamps take none."
+      authority: "tasks.md 1.5 is a PR1 task and the run instructions state it explicitly. Deleting the three rgba() glows alone would have left the lamps shadowless, which is permitted but leaves the hard-offset-only contract half-delivered."
+  engineering_notes:
+    - >-
+      Prose comments that QUOTE an audited literal break the audit that greps for it. Four
+      comments added during this pass each contained one of the very strings the contract
+      counts: the offset literal, the blur patterns, the rx values, and a deleted utility
+      name. All were rewritten to describe without quoting. Any future comment added near
+      these greps must follow the same rule.
+    - >-
+      A CSS comment cannot contain the glob src/** — the */ inside it terminates the comment
+      early and Tailwind then parses the remainder as content inside @theme, failing the
+      build with "@theme blocks must only contain custom properties". tsc and every grep
+      passed on the broken file; only npm run build caught it. Run the build, not just tsc,
+      whenever @theme changes.
+    - >-
+      The emitted-CSS check for deleted utilities is not a valid audit: @theme extends rather
+      than replaces Tailwind's default palette, so --color-white, --color-slate-900 and
+      --tw-drop-shadow are present in dist regardless of usage. Absence must be asserted on
+      the source, which is what config.yaml actually specifies.
+  not_done:
+    - "PR2 tasks 2.1-2.16 — all seven scene layers, the atomic sky period+tile migration, answer feedback, question typography, score HUD chip, car tier recolour, and the 2.14 human sign-off gate."
+    - "R3-2 automated seam regression test — not closable from this project."
+
+apply_pr2_scene:
+  date: 2026-10-02
+  by: sdd-apply
+  trigger: >-
+    Maintainer reported red, yellow and orange pixels glowing behind the car, asked for
+    them removed, and asked for the background scenery and road work to follow
+    automatically. The crash signal was explicitly reduced to the existing fade.
+  scope: "Tasks 2.1-2.8 (the scene and the road) plus the car-glow removal. Tasks 2.9-2.13 deliberately NOT started — see not_done."
+  user_directives:
+    - "Delete the red/orange/yellow pixels behind the car. Keep only the crash fade."
+    - "Do not carry the per-pixel damage marks. The maintainer reported they rendered regardless of vehicle state."
+    - "Stay inside this instruction and the already-proposed designs. Do not revisit other aspects."
+  car_glow_root_cause: >-
+    Three separate sources, not one. (1) .car-aura painted the car body colour across
+    the whole sprite box at 0.6 opacity behind the car whenever lives >= 5. (2) The
+    damage marks on the crash frame used --color-car-damage #ef4444 red and
+    --color-car-spark #f97316 orange at 0.7 opacity. (3) --color-car-tier5 #facc15
+    yellow is the 5+ lives body colour. The maintainer observed all three at once
+    because the aura and the spark marks share the space directly behind the sprite.
+  changed:
+    src/index.css: >-
+      11 --color-scene-* tokens added; --color-track-line, --color-dash and
+      --color-ground-tint retired; .car-aura, @keyframes pulse and the .car-aura
+      reduced-motion entry deleted; --color-car-damage and --color-car-spark deleted;
+      scroll layers 3 -> 7 (sky 120s, hills 60s, trees 25s, ground 10s, edges 2s,
+      rumble 2s, dashes 2s); reduced-motion entries 3 -> 7.
+    src/components/ArcadeBackground.tsx: >-
+      3 layers -> 7, repainted sky -> hills -> trees -> ground -> edges -> rumble ->
+      dashes. Every animated layer now uses w-[3840px] containers with two
+      w-[1920px] tiles, plus a second synced row so viewports wider than 1920px stay
+      covered to 7680px. Sky migrated atomically to fixed tiles, a vertical two-stop
+      sky-top-to-horizon gradient, a sun and two off-seam clouds. Hills are 3 SVG peaks
+      at 213/853/1493; trees are 8 SVG trees at 120+240k. Ground is a flat road fill;
+      edges are a 60px-period rumble-white gradient; rumble is a 192px-period
+      red/white kerb; dashes repointed to --color-scene-road-dashes. Dead tileGradient
+      and groundGradient constants removed.
+    src/components/CarSprite.tsx: >-
+      rx values returned to 2/1 per the 1.14 supersession; the damage prop and all four
+      damage/spark rects deleted; the .car-aura sibling div deleted; the --car-color
+      wrapper custom property deleted with it; header and crash-frame comments rewritten.
+  verification:
+    - "V.1 npx tsc --noEmit exits 0. npx vite build prints a built line."
+    - "V.2 census 15 lines = 8 definitions + 7 reduced-motion entries. rx = 8, ry = 0, all rx in {1,2}. hex/rgba in ArcadeBackground.tsx = 0. --color-track-line, --color-dash and --color-ground-tint = 0 hits. car-aura / car-damage / car-spark / car-color / keyframes pulse = 0 hits outside prose comments."
+    - "V.3 1920 mod {128, 640, 240, 40, 60, 192} = 0 for all six. Speeds 16 < 32 < 76.8 < 192 < 960."
+  deviations:
+    - id: sky-background-size-dropped
+      task_said: "sky backgroundSize 100px -> 128px in the same atomic edit"
+      implemented: "backgroundSize dropped entirely; the sky period is the 1920px tile width itself."
+      authority: >-
+        Once the checkerboard tile became a vertical two-stop gradient, a 128px
+        backgroundSize banded that gradient visibly every 128px. Making the period the
+        tile width is strictly stronger than 128 (1920 is an exact multiple of itself),
+        so the seam invariant holds with a larger margin. Atomicity was preserved: the
+        component was written in a single edit.
+    - id: road-stripe-texture-retired
+      task_said: "repoint the ground tint to --color-scene-road"
+      implemented: "The 40px 1px stripe texture is gone; the road is a uniform --color-scene-road fill."
+      authority: >-
+        The stripe measured 1.02:1 against its own background, which is why 2.6 exists.
+        With edge, rumble and dash layers now carrying all road structure, a uniform fill
+        satisfies translateX(-50%) wrapping at every viewport by construction. The
+        retired 40px period is recorded here so V.3's 1920 mod 40 = 0 is not read as a
+        claim about a texture that no longer exists.
+    - id: edge-lines-dashed-not-solid
+      task_said: "road edge lines, repeating-linear-gradient, off-seam by construction"
+      implemented: "40px runs separated by 20px gaps at the 60px period."
+      authority: >-
+        A fully solid band at 60px has nothing to animate at 960 px/s, which is the
+        dead-animation failure this change exists to remove. 1920 mod 60 = 0 either way.
+    - id: clearance-read-horizontal
+      task_said: >-
+        "23 px clearance" for hills and "72 px" for trees.
+      implemented: "Read as horizontal distance from the tile boundary, not vertical."
+      authority: >-
+        213 - 380/2 = 23 and 120 - 96/2 = 72 match V.3's phrasing 'off-seam read of hills
+        (23 px) and trees (72 px)' exactly. A literal 23px vertical sky slot between
+        hills and treeline would read as a rendering bug.
+    - id: spec-arithmetic-corrected
+      task_said: "1920 mod {128, 640, 240, 40, 60, 192} = {15, 3, 8, 48, 32, 10}"
+      implemented: "Corrected in tasks.md V.3 to 0, with the quotients shown as quotients."
+      authority: >-
+        The numbers were quotients, not remainders: 1920 = 15x128 = 3x640 = 8x240 =
+        48x40 = 32x60 = 10x192. Every period divides 1920 exactly, so the design was
+        right and only the labels were wrong. Left uncorrected, a verifier checking the
+        invariant against V.3 would fail a correct implementation.
+  engineering_notes:
+    - >-
+      PowerShell 5.1 corrupted src/index.css into UTF-16 twice in this session: once via
+      Set-Content -Encoding UTF8 and once via shell redirection of git show. Both
+      presented as 'Invalid declaration: @import "tailwindcss"' with the error text
+      rendered as spaced-out UTF-16 bytes, which is the tell. Recovery is
+      git restore --worktree -- src/index.css, never a shell write.
+    - >-
+      The CRASH PIXELS NEVER GATED ON STATE. BodyPixel accepted damage as a prop and
+      only the isCrashed branch passed it, but the aura div rendered on lives >= 5
+      regardless of crash state and was a full-box 0.6-opacity fill in the body colour.
+      Read the branch conditions before assuming a visual is crash-only.
+  not_done:
+    - "2.9 answer-feedback snapshot and 2.10 the no-glyph visual — not started."
+    - "2.11 question typography — not started."
+    - "2.12 score HUD pixel-panel chip — not started. The score value still uses text-white at 1.95:1 over the new bright sky and remains the legibility defect 2.12 exists to fix."
+    - "2.13 car tier recolour and 2.15 tier-1 legibility — not started. 2.13 is blocked by 2.14."
+    - "2.14 R-4 human sign-off — NOT DISCHARGED. Adjacent tier ratios 1.86 / 1.59 / 1.04 are evidence of risk, not sign-off. A person must confirm at 2x with the app open. Not fabricateable."
+    - "2.16 human sign-off list — NOT DISCHARGED. Same reason. The 23px hill margin and the daylight-not-dusk read both need eyes on the running app."
+    - "R3-2 automated seam regression test — not closable from this project."
+  blocked_on_human:
+    - 2.14
+    - 2.16
+
+art_direction_amendment:
+  date: 2026-10-03
+  by: sdd-spec
+  phase_at_amendment: apply
+  note: >-
+    Mid-change re-plan. The scene art delivered by apply_pr2_scene was reviewed and REJECTED as
+    "simple blocks of color without any detail". The art direction is REPLACED. This is a
+    Phase 0 replanning event, NOT a phase transition: next_phase stays apply, and the phases
+    table above is untouched.
+  trigger: >-
+    The maintainer reviewed the delivered scene and named three references. Enter the Gungeon
+    and middle-generation (Gen-3) Pokemon are both true pixel art and share one technique set.
+    Celeste is the outlier — hand-drawn vector bezier art on no pixel grid — and was RULED OUT
+    as unreachable. The maintainer then chose the Gungeon / Gen-3 pixel-art direction and fixed
+    the sprite resolutions in one pass.
+  ruling: >-
+    Every scene sprite form carries a hard 1px dark outline and a four-tone ramp (base, shadow,
+    light, highlight); every ramp and band transition is Bayer 4x4 ordered dithered; distant
+    layers blend toward the sky token and desaturate, and ATMOSPHERIC DESATURATION IS THE
+    PRIMARY DEPTH CUE — complementary to the parallax speed ladder, not a replacement for it.
+    Every sprite renders with shape-rendering="crispEdges" and image-rendering: pixelated, at
+    its own aspect-matched viewBox.
+  superseded:
+    - >-
+      Flat single-colour sprite fills — the entire premise of the delivered scene art. No flat
+      fill is a conforming value for any scene material.
+    - >-
+      The fixed count of 11 --color-scene-* tokens — replaced by per-material tone ramps,
+      roughly 20 entries including outlines. NOT a rule bend: AGENTS.md hard rule 1 requires a
+      token per colour and a four-tone ramp cannot be expressed without one token per tone, so
+      the ramp widens the NUMBER the rule already demands and changes no part of the rule.
+    - >-
+      Band stacks as a constraint on shape. preserveAspectRatio="none" (ArcadeBackground.tsx:143
+      hills, :202 trees) was the documented reason diagonals were avoided: the fixed 1920px tile
+      keeps horizontal scale at exactly 1:1, while the viewBox is stretched on the vertical axis,
+      which softens every diagonal. Pixel art needs diagonals, so the stretch goes and
+      per-sprite aspect-matched viewBoxes replace it. meet is NOT a safe substitute — it shrinks
+      the horizontal scale too and silently breaks the 1920px tiling.
+  unchanged:
+    - >-
+      NO-RASTER. Art stays hand-authored inline SVG — no image files, no sprite sheet, no new
+      runtime dependency. Pixel art is a technique, not a file format; nothing about the ramp
+      needs a raster asset.
+    - >-
+      All PR2 geometry. Every period, duration, speed, tile width, clearance and paint-order
+      decision stands. The amendment reworks art OUTPUT only, so the parallax arithmetic in V.3
+      is untouched.
+    - "next_phase: apply, and the phases table."
+    - "2.16 and P.14 are separate sign-offs. This amendment discharges neither."
+  resolutions_fixed:
+    car: 32x16
+    tree: 32x48
+    cloud: 48x24
+    sun: "32x32 — stepped octagon with 4 blocky rays; today a <circle>"
+    hills: "3-tone mass with dithered band transitions"
+    grass: "3-tone band with tufts breaking the top edge"
+  verified_against_source:
+    - >-
+      image-rendering: pixelated exists ONLY as an inline style on the car <svg>
+      (CarSprite.tsx:87). No CSS rule in src/ sets it and no scene sprite carries it.
+      shape-rendering appears NOWHERE in src/. Both are work to be done, not existing
+      behaviour — a verifier must not read them as already delivered.
+    - >-
+      src/index.css carries 12 --color-scene-* tokens, not the 11 the delta enumerated.
+      --color-scene-grass #46964f paints the verge and was in no spec list at all; the delta's
+      ramp table now names it.
+    - >-
+      The stale "the namespace does not exist today" claim on tasks.md 2.1 is corrected there.
+  artifacts_updated:
+    - "openspec/design/arcade-retrofit.md — new 'Amendment 2026-10-03' section; the Car sprite approach row is marked amended in its fill discipline only, with NO-RASTER explicitly unchanged."
+    - "openspec/changes/arcade-scene-backdrop/specs/game/spec.md — the palette requirement rewritten to ramp groups with the deviation recorded in place; four requirements added; the header note records the rejected references and the token-count discrepancy."
+    - "openspec/changes/arcade-scene-backdrop/tasks.md — new PR2-A group, tasks P.1 through P.14, all UNCHECKED; 2.1, V.2 and V.5 annotated."
+    - "openspec/changes/arcade-scene-backdrop/state.yaml — this block, plus the spec_revision counts."
+  known_contradictions_not_edited:
+    - >-
+      design.md Decision 4 still fixes the palette at 11 tokens, and its Technical Approach
+      still describes every layer as a gradient or clip-path silhouette while the source draws
+      inline SVG. Both are design-phase artifacts and were left alone deliberately.
+    - >-
+      proposal.md, the delta's own Status header, the PR2 task text and openspec/status.md all
+      describe the scene as unimplemented or proposed-only, while apply_pr2_scene records that
+      it IS implemented. Left for the apply and verify phases.
+
+recovered_from:
+  store: engram
+  observations: [54]
+  recovered_on: 2026-09-26
+  note: >-
+    This plan was confirmed with the user in plan mode on 2026-09-01 and then never
+    implemented. It existed only as Engram observation #54 and in no repo file. It was
+    written to the repo on 2026-09-26 when the project switched to artifact_store=openspec.
+    Scope was extended and a spec delta written on 2026-09-28. The delta was then rewritten
+    the same day against a 12-question design interview, and corrected a second time the same
+    day after adversarial re-verification refuted its parallax table. Still nothing
+    implemented.
