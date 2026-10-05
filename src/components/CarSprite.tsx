@@ -67,20 +67,20 @@ function getTierColor(lives: number): { base: string; light: string; shadow: str
 const CAR_MATRIX: readonly string[] = [
   /* 0 */ "................................",
   /* 1 */ "................................",
-  /* 2 */ "................................",
-  /* 3 */ ".OOOOO..........................", // Rear spoiler wing
-  /* 4 */ ".OLLLO.....OOOOOOOOO............", // Spoiler & roof top line
-  /* 5 */ "..OO.....OOLLLLLLLLLOO..........", // Strut & roof highlight
-  /* 6 */ "..OO....OOWWWWWWWWWWWGGO........", // Rear window, side glass, windshield
-  /* 7 */ "..OO...OOWWWWWWWWWWWWGGO........", // Cabin side glass & A-pillar
-  /* 8 */ ".OBBBBBOOWWWWWWWWWWWWGGO........", // Trunk deck & windshield base
-  /* 9 */ "OTTTTBBOOLLLLLLLLLLLLLLLLLOOO...", // Taillights, waistline & sloping hood
-  /* 10*/ "OTTTBBBBBBBBBBBBBBBBBBBBBBLLLLHO", // Mid body, door, headlights
-  /* 11*/ "OBBBBBBBBBBBBBBBBBBBBBBBBBBBBBHO", // Lower body, front bumper
-  /* 12*/ ".OOSSSSSSOOOOOOOOOOOOSSSSSSOOOO.", // Wheel arches & rocker panel
-  /* 13*/ "..OKKKKKKO..OOOOOO..OKKKKKKO....", // Tires top & chassis underside
-  /* 14*/ "..OKKRRKKO..........OKKRRKKO....", // Tires & silver rims
-  /* 15*/ "...OKKKKO............OKKKKO.....", // Tire contact patch
+  /* 2 */ ".......LLLLLLLLLLLL.............",
+  /* 3 */ "......LWWWWWWWLWWWWWWL..........",
+  /* 4 */ ".....LWWGWWWWWLWWGWGWWL.........",
+  /* 5 */ "..LLLLBBBBBBBLBBBBBBBBBBBLLL....",
+  /* 6 */ ".HHBBBBBBBBBBLBBBBBBBBBBBBBBBBH.",
+  /* 7 */ "HHBBBBBBBBBBBLBBBBBBBBBBBBBBBBHH",
+  /* 8 */ "BBBBBBBBBBBBBLBBBBBBBBBBBBBBBBBB",
+  /* 9 */ "BSSOOOOOOOSSSSSSSSSSSSOOOOOOOSSS",
+  /* 10*/ "SSOKKKKKKKOSSSSSSSSSSOKKKKKKKOSS",
+  /* 11*/ "SSOKKRRRKKOOOOOOOOOOOOKKRRRKKOSS",
+  /* 12*/ "..OKRRRRRKO..........OKRRRRRKO..",
+  /* 13*/ "..OKKRRRKKO..........OKKRRRKKO..",
+  /* 14*/ "...OKKKKKO............OKKKKKO....",
+  /* 15*/ "....OOOOO..............OOOOO.....",
 ];
 
 export default function CarSprite({
