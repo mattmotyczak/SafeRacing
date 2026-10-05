@@ -231,13 +231,13 @@ export default function App() {
       </header>
 
       {/* Main Content: Dashboard */}
-      <main className="flex flex-col items-center justify-center pt-20 pb-32 px-6 relative z-10 max-h-[calc(100vh-80px)]">
-        <div className="w-full max-w-[1100px] perspective-1000 flex flex-col flex-1 min-h-0">
+      <main className="flex flex-col items-center justify-center pt-20 pb-8 px-6 relative z-10 h-[calc(100vh-80px)]">
+        <div className="w-full max-w-[1100px] perspective-1000 grid grid-rows-[1fr_auto] h-full">
           <motion.div
             initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.98, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="flex-1 min-h-0 w-full relative pixel-panel game-sector-glow rounded-none overflow-hidden group" style={{ aspectRatio: '16/9' }}
+            className="min-h-0 w-full relative pixel-panel game-sector-glow rounded-none overflow-hidden group" style={{ aspectRatio: (currentQuestion && !isMoving && !isCrashed) ? undefined : '16/9' }}
           >
             {/* Infinite Runner View */}
 {status === 'playing' && (
