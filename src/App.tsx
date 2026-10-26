@@ -242,11 +242,16 @@ export default function App() {
             className="min-h-0 w-full relative pixel-panel game-sector-glow rounded-none overflow-hidden group" style={{ aspectRatio: (currentQuestion && !isMoving && !isCrashed) ? undefined : '16/9' }}
           >
             {/* Infinite Runner View */}
-{status === 'playing' && (
-                <div className="absolute inset-0 z-0">
-                {/* Arcade Tiled Background */}
-                <ArcadeBackground isMoving={isMoving} />
+            {/* Backdrop mounts at boot and stays mounted (hidden outside play)
+                so starting a game never pays the ~10^5-node first render.
+                `invisible`, not `hidden`: display:none would defer layout and
+                put the cost straight back on game start. */}
+            <div className={`absolute inset-0 z-0 ${status === 'playing' ? '' : 'invisible'}`}>
+              <ArcadeBackground isMoving={isMoving} />
+            </div>
 
+            {status === 'playing' && (
+                <div className="absolute inset-0 z-0">
                 {/* GUI Stoplight */}
                 <div className="absolute top-6 right-6 z-40">
                   <div className="pixel-panel p-2 flex flex-col gap-2">
@@ -285,45 +290,6 @@ export default function App() {
                       />
                     </div>
 
-                    {isCrashed && (
-                      <div
-                        className="absolute -top-8 left-1/2 -translate-x-1/2 w-16 h-16 pointer-events-none"
-                        aria-hidden
-                      >
-                        {!prefersReducedMotion && (
-                          <>
-                            <div
-                              className="absolute top-1/2 left-1/2 w-2 h-2 pixel-burst-block"
-                              style={{ background: "var(--color-scorch-ember)", animation: "pixelBurstBlock 280ms steps(1) forwards", "--burst-x": "-10px", "--burst-y": "-14px" } as CSSProperties}
-                            />
-                            <div
-                              className="absolute top-1/2 left-1/2 w-2 h-2 pixel-burst-block"
-                              style={{ background: "var(--color-scorch-burnt-orange)", animation: "pixelBurstBlock 260ms steps(1) forwards", animationDelay: "20ms", "--burst-x": "8px", "--burst-y": "-12px" } as React.CSSProperties}
-                            />
-                            <div
-                              className="absolute top-1/2 left-1/2 w-2 h-2 pixel-burst-block"
-                              style={{ background: "var(--color-scorch-grey)", animation: "pixelBurstBlock 300ms steps(1) forwards", animationDelay: "10ms", "--burst-x": "-4px", "--burst-y": "-16px" } as React.CSSProperties}
-                            />
-                            <div
-                              className="absolute top-1/2 left-1/2 w-2 h-2 pixel-burst-block"
-                              style={{ background: "var(--color-scorch-soot)", animation: "pixelBurstBlock 290ms steps(1) forwards", animationDelay: "30ms", "--burst-x": "12px", "--burst-y": "-10px" } as React.CSSProperties}
-                            />
-                            <div
-                              className="absolute top-1/2 left-1/2 w-2 h-2 pixel-burst-block"
-                              style={{ background: "var(--color-scorch-charred)", animation: "pixelBurstBlock 310ms steps(1) forwards", animationDelay: "15ms", "--burst-x": "-12px", "--burst-y": "-8px" } as React.CSSProperties}
-                            />
-                            <div
-                              className="absolute top-1/2 left-1/2 w-1 h-1 pixel-burst-block"
-                              style={{ background: "var(--color-scorch-ash)", animation: "pixelBurstBlock 250ms steps(1) forwards", animationDelay: "25ms", "--burst-x": "6px", "--burst-y": "-18px" } as React.CSSProperties}
-                            />
-                            <div
-                              className="absolute top-1/2 left-1/2 w-1 h-1 pixel-burst-block"
-                              style={{ background: "var(--color-scorch-ember)", animation: "pixelBurstBlock 240ms steps(1) forwards", animationDelay: "35ms", "--burst-x": "-8px", "--burst-y": "-14px" } as React.CSSProperties}
-                            />
-                          </>
-                        )}
-                      </div>
-                    )}
 
                     {isMoving && !isCrashed && (
                       <motion.div

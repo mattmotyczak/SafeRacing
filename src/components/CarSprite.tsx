@@ -14,6 +14,7 @@
 
 import React from "react";
 import type { CSSProperties } from "react";
+import { useReducedMotion } from "motion/react";
 
 export interface CarSpriteProps {
   isMoving: boolean;
@@ -21,6 +22,24 @@ export interface CarSpriteProps {
   lives: number;
   className?: string;
 }
+
+interface SmokePuffDef {
+  dx: string;
+  dy: string;
+  color: string;
+  delay: string;
+  duration: string;
+}
+
+/** Staggered rising smoke puffs emitted from impact point */
+const SMOKE_PUFFS: readonly SmokePuffDef[] = [
+  { dx: "-8px", dy: "-20px", color: "var(--color-scorch-grey)", delay: "100ms", duration: "1800ms" },
+  { dx: "6px", dy: "-24px", color: "var(--color-scorch-ash)", delay: "280ms", duration: "2000ms" },
+  { dx: "-4px", dy: "-28px", color: "var(--color-scorch-soot)", delay: "500ms", duration: "2200ms" },
+  { dx: "-10px", dy: "-26px", color: "var(--color-scorch-charred)", delay: "750ms", duration: "2400ms" },
+  { dx: "8px", dy: "-30px", color: "var(--color-scorch-soot)", delay: "1050ms", duration: "2300ms" },
+  { dx: "-5px", dy: "-32px", color: "var(--color-scorch-charred)", delay: "1350ms", duration: "2100ms" },
+];
 
 function getTierColor(lives: number): { base: string; light: string; shadow: string } {
   let base: string;
@@ -104,6 +123,7 @@ export default function CarSprite({
   lives,
   className = "",
 }: CarSpriteProps) {
+  const prefersReducedMotion = useReducedMotion();
   const { base, light, shadow } = getTierColor(lives);
   const pitch = 2; // 32 * 2 = 64px width, 16 * 2 = 32px height
 
@@ -153,7 +173,7 @@ export default function CarSprite({
         viewBox="0 0 64 32"
         role="img"
         aria-label={`Car sprite — ${lives} lives remaining`}
-        className="w-full h-full"
+        className="w-full h-full overflow-visible"
         style={svgStyle}
         shapeRendering="crispEdges"
       >
@@ -168,6 +188,74 @@ export default function CarSprite({
         ) : (
           <g>
             {cells}
+          </g>
+        )}
+
+        {/* Crash Fireball & Smoke FX spawned in car coordinate space */}
+        {isCrashed && (
+          <g transform="translate(48, 14) scale(1.5)" className="pointer-events-none" aria-hidden="true">
+            {prefersReducedMotion ? (
+              <rect
+                x="-48"
+                y="-14"
+                width="64"
+                height="32"
+                fill="var(--color-scorch-burnt-orange)"
+                className="crash-reduced-flash"
+                transform="scale(0.6667)"
+                transformOrigin="0 0"
+              />
+            ) : (
+              <>
+                {/* 1. Initial Impact Flash */}
+                <rect
+                  x="-12"
+                  y="-12"
+                  width="24"
+                  height="24"
+                  fill="var(--color-scene-sun-highlight)"
+                  className="crash-flash motion-reduce:animate-none"
+                />
+
+                {/* 2. Expanding & Color-Shifting Fireball */}
+                <path
+                  d="M-3 -6 h6 v2 h3 v8 h-3 v2 h-6 v-2 h-3 v-8 h3 z"
+                  fill="var(--color-scorch-burnt-orange)"
+                  className="crash-fireball-outer motion-reduce:animate-none"
+                />
+                <path
+                  d="M-2 -4 h4 v1 h2 v6 h-2 v1 h-4 v-1 h-2 v-6 h2 z"
+                  fill="var(--color-scorch-ember)"
+                  className="crash-fireball-mid motion-reduce:animate-none"
+                />
+                <rect
+                  x="-2"
+                  y="-2"
+                  width="4"
+                  height="4"
+                  fill="var(--color-scene-sun-highlight)"
+                  className="crash-fireball-core motion-reduce:animate-none"
+                />
+
+                {/* 3. Staggered Rising Smoke Puffs */}
+                {SMOKE_PUFFS.map((puff, i) => (
+                  <path
+                    key={`smoke-${i}`}
+                    d="M-1 -3 h2 v1 h2 v4 h-2 v1 h-4 v-1 h-2 v-4 h2 z"
+                    fill={puff.color}
+                    className="crash-smoke-puff motion-reduce:animate-none"
+                    style={
+                      {
+                        "--smoke-dx": puff.dx,
+                        "--smoke-dy": puff.dy,
+                        "--smoke-duration": puff.duration,
+                        animationDelay: puff.delay,
+                      } as CSSProperties
+                    }
+                  />
+                ))}
+              </>
+            )}
           </g>
         )}
       </svg>

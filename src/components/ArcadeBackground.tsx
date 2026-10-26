@@ -41,7 +41,7 @@
  * @license Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, memo } from "react";
 import type { ReactNode } from "react";
 import { useReducedMotion } from "motion/react";
 import {
@@ -109,27 +109,55 @@ function ScrollLayer({ scrollClass, scrollState, boxClassName, renderTile }: Scr
   );
 }
 
-/** Render a Grid as <rect> elements at the given pitch (local, React-specific) */
-function renderGrid(grid: Grid, pitch: number): React.ReactElement[] {
-  const cells: React.ReactElement[] = [];
+interface PathDef {
+  fill: string;
+  d: string;
+}
+
+/**
+ * Consolidate contiguous horizontal runs of identical tokens into SVG rectangle subpaths:
+ * M x y h w v pitch h -w z
+ * Grouped by fill token to emit a single <path> per unique color.
+ * Replaces ~124,000 individual <rect> nodes with ~200 <path> nodes across the scene.
+ */
+function gridToPaths(grid: Grid, pitch: number, depthFactor = 0): PathDef[] {
+  const colorRuns = new Map<string, string[]>();
   for (let r = 0; r < grid.length; r++) {
-    for (let c = 0; c < grid[r].length; c++) {
-      const token = grid[r][c];
-      if (token !== ".") {
-        cells.push(
-          <rect
-            key={`${r}-${c}`}
-            x={c * pitch}
-            y={r * pitch}
-            width={pitch}
-            height={pitch}
-            fill={token}
-          />
-        );
+    const row = grid[r];
+    const y = r * pitch;
+    let c = 0;
+    while (c < row.length) {
+      const token = row[c];
+      if (token === ".") {
+        c++;
+        continue;
       }
+      const startC = c;
+      while (c < row.length && row[c] === token) {
+        c++;
+      }
+      const x = startC * pitch;
+      const w = (c - startC) * pitch;
+      let runs = colorRuns.get(token);
+      if (!runs) {
+        runs = [];
+        colorRuns.set(token, runs);
+      }
+      runs.push(`M${x} ${y}h${w}v${pitch}h${-w}z`);
     }
   }
-  return cells;
+
+  const result: PathDef[] = [];
+  for (const [token, runs] of colorRuns.entries()) {
+    const fill =
+      depthFactor > 0
+        ? depthMix(token, depthFactor)
+        : token.startsWith("var(")
+          ? token
+          : depthMix(token, depthFactor);
+    result.push({ fill, d: runs.join(" ") });
+  }
+  return result;
 }
 
 /** Build a shaded+outlined sprite grid using the pixel pipeline */
@@ -162,18 +190,86 @@ function buildHillGrid(): Grid {
   return dithered;
 }
 
+/* Processed grids and path sets are computed once at import. The pipeline is
+ * pure and its inputs are module constants, so running it inside render rebuilt
+ * the whole scene on every state change — and ScrollLayer renders each tile
+ * twice per row across two rows. Precomputing path data reduces ~10^5 DOM
+ * elements down to ~200 while preserving pixel-perfect visual fidelity. */
+const SUN_GRID = buildSpriteGrid(
+  sunSprite.grid,
+  sunSprite.ramp,
+  sunSprite.outlineToken,
+  sunSprite.light,
+  true
+);
+const SUN_PATHS = gridToPaths(SUN_GRID, sunSprite.pitch);
+const SUN_VIEWBOX_WIDTH = sunSprite.grid[0].length * sunSprite.pitch;
+const SUN_VIEWBOX_HEIGHT = sunSprite.grid.length * sunSprite.pitch;
+
+const CLOUD_GRID = buildSpriteGrid(
+  cloudSprite.grid,
+  cloudSprite.ramp,
+  cloudSprite.outlineToken,
+  cloudSprite.light,
+  true
+);
+const CLOUD_PATHS = gridToPaths(CLOUD_GRID, cloudSprite.pitch);
+const CLOUD_VIEWBOX_WIDTH = cloudSprite.grid[0].length * cloudSprite.pitch;
+const CLOUD_VIEWBOX_HEIGHT = cloudSprite.grid.length * cloudSprite.pitch;
+
+const TRUNK_GRID = buildSpriteGrid(
+  treeTrunkSprite.grid,
+  treeTrunkSprite.ramp,
+  treeTrunkSprite.outlineToken,
+  treeTrunkSprite.light,
+  true
+);
+const FOLIAGE_GRID = buildSpriteGrid(
+  treeFoliageSprite.grid,
+  treeFoliageSprite.ramp,
+  treeFoliageSprite.outlineToken,
+  treeFoliageSprite.light,
+  true
+);
+const TRUNK_PATHS = gridToPaths(TRUNK_GRID, treeSprite.pitch, 0.15);
+const FOLIAGE_PATHS = gridToPaths(FOLIAGE_GRID, treeSprite.pitch, 0.15);
+
+const TREE_BASE_WIDTH = treeSprite.grid[0].length; // 32
+const TREE_BASE_HEIGHT = treeSprite.grid.length; // 48
+const TREE_PITCH = treeSprite.pitch; // 2
+const TREE_PIXEL_WIDTH = TREE_BASE_WIDTH * TREE_PITCH; // 64px
+const TREE_POSITIONS = Array.from({ length: 8 }, (_, k) => 120 + 240 * k);
+
+/** 640px hill period repeated 3× to fill the 1920px tile. */
+const HILLS_GRID = buildHillGrid();
+const HILLS_FULL_GRID: Grid = HILLS_GRID.map((row) =>
+  Array.from({ length: 3 }, () => row).flat()
+) as Grid;
+const HILLS_PATHS = gridToPaths(HILLS_FULL_GRID, hillSprite.pitch, 0.35);
+const HILLS_VIEWBOX_WIDTH = HILLS_FULL_GRID[0].length * hillSprite.pitch;
+const HILLS_VIEWBOX_HEIGHT = HILLS_FULL_GRID.length * hillSprite.pitch;
+
+/** Tufted top 4 rows alternate highlight/light, then solid bands. */
+function grassBandIndex(r: number): number {
+  if (r < 4) return r % 2 === 0 ? 0 : 1;
+  return Math.floor((r - 4) / 5) % 3;
+}
+
+const GRASS_GRID = ditherBand(
+  grassSprite.grid,
+  grassSprite.ramp as readonly string[],
+  (r, _c) => grassBandIndex(r)
+);
+const GRASS_PATHS = gridToPaths(GRASS_GRID, grassSprite.pitch, 0);
+const GRASS_HEIGHT = GRASS_GRID.length * grassSprite.pitch; // 80px
+const GRASS_WIDTH = GRASS_GRID[0].length * grassSprite.pitch; // 1920px
+
+const ROAD_TEXTURE_PATHS = gridToPaths(roadTextureSprite.grid, roadTextureSprite.pitch, 0);
+const ROAD_TEXTURE_WIDTH = roadTextureSprite.grid[0].length * roadTextureSprite.pitch; // 1920px
+const ROAD_TEXTURE_HEIGHT = roadTextureSprite.grid.length * roadTextureSprite.pitch; // 40px
+
 /** Render a sun sprite at given position within the 1920px tile */
 function SunSprite({ x, y, size = 64 }: { x: number; y: number; size?: number }) {
-  const grid = buildSpriteGrid(
-    sunSprite.grid,
-    sunSprite.ramp,
-    sunSprite.outlineToken,
-    sunSprite.light,
-    true
-  );
-  const viewBoxWidth = sunSprite.grid[0].length * sunSprite.pitch;
-  const viewBoxHeight = sunSprite.grid.length * sunSprite.pitch;
-
   return (
     <svg
       className="absolute"
@@ -184,27 +280,19 @@ function SunSprite({ x, y, size = 64 }: { x: number; y: number; size?: number })
         height: `${size}px`,
         imageRendering: "pixelated",
       }}
-      viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
+      viewBox={`0 0 ${SUN_VIEWBOX_WIDTH} ${SUN_VIEWBOX_HEIGHT}`}
       shapeRendering="crispEdges"
       aria-hidden
     >
-      {renderGrid(grid, sunSprite.pitch)}
+      {SUN_PATHS.map((p, i) => (
+        <path key={i} d={p.d} fill={p.fill} />
+      ))}
     </svg>
   );
 }
 
 /** Render a cloud sprite at given position within the 1920px tile */
 function CloudSprite({ x, y, width = 96, height = 48 }: { x: number; y: number; width?: number; height?: number }) {
-  const grid = buildSpriteGrid(
-    cloudSprite.grid,
-    cloudSprite.ramp,
-    cloudSprite.outlineToken,
-    cloudSprite.light,
-    true
-  );
-  const viewBoxWidth = cloudSprite.grid[0].length * cloudSprite.pitch;
-  const viewBoxHeight = cloudSprite.grid.length * cloudSprite.pitch;
-
   return (
     <svg
       className="absolute"
@@ -215,29 +303,19 @@ function CloudSprite({ x, y, width = 96, height = 48 }: { x: number; y: number; 
         height: `${height}px`,
         imageRendering: "pixelated",
       }}
-      viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
+      viewBox={`0 0 ${CLOUD_VIEWBOX_WIDTH} ${CLOUD_VIEWBOX_HEIGHT}`}
       shapeRendering="crispEdges"
       aria-hidden
     >
-      {renderGrid(grid, cloudSprite.pitch)}
+      {CLOUD_PATHS.map((p, i) => (
+        <path key={i} d={p.d} fill={p.fill} />
+      ))}
     </svg>
   );
 }
 
 /** Render the hills layer as a full 1920px tile using hillSprite (640px period, 3 peaks) */
 function HillsTile() {
-  // hillSprite.grid is 160×50 at pitch 4 = 640×200px. We need 3 repeats for 1920px.
-  const baseGrid = buildHillGrid();
-  const baseWidth = baseGrid[0].length; // 160
-  const baseHeight = baseGrid.length;   // 50
-  const repeats = 3; // 1920 / 640 = 3
-
-  // Tile horizontally 3 times
-  const fullGrid: Grid = baseGrid.map((row) =>
-    Array.from({ length: repeats }, (_, i) => row).flat()
-  ) as Grid;
-
-  // Depth factor for hills: 0.35 → 65% color, 35% sky-horizon
   const depthFactor = 0.35;
 
   return (
@@ -249,30 +327,15 @@ function HillsTile() {
     >
       <svg
         className="absolute inset-0"
-        viewBox={`0 0 ${fullGrid[0].length * hillSprite.pitch} ${fullGrid.length * hillSprite.pitch}`}
+        viewBox={`0 0 ${HILLS_VIEWBOX_WIDTH} ${HILLS_VIEWBOX_HEIGHT}`}
         shapeRendering="crispEdges"
         preserveAspectRatio="none"
         style={{ imageRendering: "pixelated", width: "100%", height: "100%" }}
         aria-hidden
       >
-        {fullGrid.map((row, r) =>
-          row.map((token, c) => {
-            if (token === ".") return null;
-            const mixedFill = depthMix(token, depthFactor);
-            return (
-              <rect
-                key={`${r}-${c}`}
-                x={c * hillSprite.pitch}
-                y={r * hillSprite.pitch}
-                width={hillSprite.pitch}
-                height={hillSprite.pitch}
-                style={{
-                  fill: mixedFill,
-                } as React.CSSProperties}
-              />
-            );
-          })
-        )}
+        {HILLS_PATHS.map((p, i) => (
+          <path key={i} d={p.d} fill={p.fill} />
+        ))}
       </svg>
     </div>
   );
@@ -280,78 +343,34 @@ function HillsTile() {
 
 /** Render the trees layer as a full 1920px tile with 8 trees at 240px pitch */
 function TreesTile() {
-  const trunkGrid = buildSpriteGrid(
-    treeTrunkSprite.grid,
-    treeTrunkSprite.ramp,
-    treeTrunkSprite.outlineToken,
-    treeTrunkSprite.light,
-    true
-  );
-  const foliageGrid = buildSpriteGrid(
-    treeFoliageSprite.grid,
-    treeFoliageSprite.ramp,
-    treeFoliageSprite.outlineToken,
-    treeFoliageSprite.light,
-    true
-  );
-  const baseWidth = treeSprite.grid[0].length;  // 32
-  const baseHeight = treeSprite.grid.length;    // 48
-  const pitch = treeSprite.pitch;               // 2
-  const treePixelWidth = baseWidth * pitch;     // 64px
-  const treePitchPx = 240;  // 240px period
-  const treesPerTile = 8;   // 1920 / 240 = 8
-
-  // Each tree is 64px wide (32*2), centered at 120 + 240k
-  const treePositions = Array.from({ length: treesPerTile }, (_, k) => 120 + treePitchPx * k);
-
-  // Depth factor for trees: 0.15 → 85% color, 15% sky-horizon
-  const depthFactor = 0.15;
-
-  const renderLayer = (grid: Grid) => (
-    <svg
-      className="absolute inset-0 w-full h-full"
-      viewBox={`0 0 ${baseWidth * pitch} ${baseHeight * pitch}`}
-      shapeRendering="crispEdges"
-      style={{ imageRendering: "pixelated" }}
-      aria-hidden
-    >
-      {grid.map((row, r) =>
-        row.map((token, c) => {
-          if (token === ".") return null;
-          const mixedFill = depthMix(token, depthFactor);
-          return (
-            <rect
-              key={`${r}-${c}`}
-              x={c * pitch}
-              y={r * pitch}
-              width={pitch}
-              height={pitch}
-              style={{
-                fill: mixedFill,
-              } as React.CSSProperties}
-            />
-          );
-        })
-      )}
-    </svg>
-  );
-
   return (
     <div className="w-[1920px] h-full relative">
-      {treePositions.map((cx, k) => (
+      {TREE_POSITIONS.map((cx, k) => (
         <div
           key={k}
           className="absolute"
           style={{
-            left: `${cx - treePixelWidth / 2}px`,
-            width: `${treePixelWidth}px`,
-            height: `${baseHeight * pitch}px`,
+            left: `${cx - TREE_PIXEL_WIDTH / 2}px`,
+            width: `${TREE_PIXEL_WIDTH}px`,
+            height: `${TREE_BASE_HEIGHT * TREE_PITCH}px`,
             bottom: "-4px",
           }}
         >
           {/* Trunk first, canopy over it so the junction outline is hidden */}
-          {renderLayer(trunkGrid)}
-          {renderLayer(foliageGrid)}
+          <svg
+            className="absolute inset-0 w-full h-full"
+            viewBox={`0 0 ${TREE_PIXEL_WIDTH} ${TREE_BASE_HEIGHT * TREE_PITCH}`}
+            shapeRendering="crispEdges"
+            style={{ imageRendering: "pixelated" }}
+            aria-hidden
+          >
+            {TRUNK_PATHS.map((p, i) => (
+              <path key={`trunk-${i}`} d={p.d} fill={p.fill} />
+            ))}
+            {FOLIAGE_PATHS.map((p, i) => (
+              <path key={`foliage-${i}`} d={p.d} fill={p.fill} />
+            ))}
+          </svg>
         </div>
       ))}
     </div>
@@ -362,60 +381,33 @@ function TreesTile() {
 function GroundTile() {
   const GRASS_FRACTION = 23.529;
 
-  // Road base — solid fill using CSS variable
-  // Grass verge — built from grassSprite with dithered bands
-  const baseGrid = grassSprite.grid;
-
-  // Band index: tufted top 4 rows (band 0=highlight, band 1=light), then solid bands
-  const bandIndexFn = (r: number): number => {
-    if (r < 4) return r % 2 === 0 ? 0 : 1;
-    return Math.floor((r - 4) / 5) % 3;
-  };
-
-  // Skip outline for grass to avoid dark border
-  const ramp = grassSprite.ramp as readonly string[];
-  const dithered = ditherBand(baseGrid, ramp, (r, _c) => bandIndexFn(r));
-
-  const grassHeight = dithered.length * grassSprite.pitch; // 80px
-  const grassWidth = dithered[0].length * grassSprite.pitch; // 1920px
-
-  // Depth factor for grass: 0 → 100% color (no atmospheric desaturation)
-  const depthFactor = 0;
-
   return (
-    <div className="w-[1920px] h-full relative"
-         style={{ backgroundColor: "var(--color-scene-road-base)" }}>
+    <div
+      className="w-[1920px] h-full relative"
+      style={{ backgroundColor: "var(--color-scene-road-base)" }}
+    >
       {/* Grass verge — top 23.529% of the layer */}
       <div
         className="absolute inset-x-0 top-0"
-        style={{ height: `${GRASS_FRACTION}%`, position: "relative", backgroundColor: "var(--color-scene-grass-base)" } as React.CSSProperties}
+        style={
+          {
+            height: `${GRASS_FRACTION}%`,
+            position: "relative",
+            backgroundColor: "var(--color-scene-grass-base)",
+          } as React.CSSProperties
+        }
       >
         <svg
           className="absolute inset-0"
-          viewBox={`0 0 ${grassWidth} ${grassHeight}`}
+          viewBox={`0 0 ${GRASS_WIDTH} ${GRASS_HEIGHT}`}
           shapeRendering="crispEdges"
           preserveAspectRatio="none"
           style={{ imageRendering: "pixelated", width: "100%", height: "100%" }}
           aria-hidden
         >
-          {dithered.map((row, r) =>
-            row.map((token, c) => {
-              if (token === ".") return null;
-              const mixedFill = depthMix(token, depthFactor);
-              return (
-                <rect
-                  key={`${r}-${c}`}
-                  x={c * grassSprite.pitch}
-                  y={r * grassSprite.pitch}
-                  width={grassSprite.pitch}
-                  height={grassSprite.pitch}
-                  style={{
-                    fill: mixedFill,
-                  } as React.CSSProperties}
-                />
-              );
-            })
-          )}
+          {GRASS_PATHS.map((p, i) => (
+            <path key={i} d={p.d} fill={p.fill} />
+          ))}
         </svg>
       </div>
     </div>
@@ -439,47 +431,22 @@ const DashesTile = () => (
 
 /** Render road texture overlay — sparse horizontal cracks & patches at 40% opacity */
 function RoadTextureTile() {
-  const baseGrid = roadTextureSprite.grid;
-  const baseWidth = baseGrid[0].length;   // 480
-  const baseHeight = baseGrid.length;     // 10
-  const pitch = roadTextureSprite.pitch;  // 4
-  const textureWidth = baseWidth * pitch; // 1920px
-  const textureHeight = baseHeight * pitch; // 40px
-
-  // Depth factor for road texture: 0 → 100% color (closest layer)
-  const depthFactor = 0;
-
   return (
     <svg
       className="w-[1920px] h-full"
-      viewBox={`0 0 ${textureWidth} ${textureHeight}`}
+      viewBox={`0 0 ${ROAD_TEXTURE_WIDTH} ${ROAD_TEXTURE_HEIGHT}`}
       shapeRendering="crispEdges"
       style={{ imageRendering: "pixelated", opacity: 0.4 }}
       aria-hidden
     >
-      {baseGrid.map((row, r) =>
-        row.map((token, c) => {
-          if (token === ".") return null;
-          const mixedFill = depthMix(token, depthFactor);
-          return (
-            <rect
-              key={`${r}-${c}`}
-              x={c * pitch}
-              y={r * pitch}
-              width={pitch}
-              height={pitch}
-              style={{
-                fill: mixedFill,
-              } as React.CSSProperties}
-            />
-          );
-        })
-      )}
+      {ROAD_TEXTURE_PATHS.map((p, i) => (
+        <path key={i} d={p.d} fill={p.fill} />
+      ))}
     </svg>
   );
 }
 
-export default function ArcadeBackground({ isMoving, className = "" }: ArcadeBackgroundProps) {
+function ArcadeBackgroundUnmemoized({ isMoving, className = "" }: ArcadeBackgroundProps) {
   const prefersReducedMotion = useReducedMotion();
   const [debugForceMotion, setDebugForceMotion] = useState(false);
 
@@ -500,9 +467,7 @@ export default function ArcadeBackground({ isMoving, className = "" }: ArcadeBac
 
   const skyTile = () => (
     <div className="w-[1920px] h-full relative" style={{ backgroundImage: skyGradient }}>
-      {/* Sun — positioned at 424px, 32px (off-seam, >200px from boundaries) */}
-      <SunSprite x={424} y={32} size={64} />
-      {/* Clouds — positioned off-seam */}
+      {/* Clouds — positioned off-seam, parallax with sky */}
       <CloudSprite x={850} y={96} width={220} height={60} />
       <CloudSprite x={1410} y={48} width={180} height={48} />
     </div>
@@ -510,10 +475,6 @@ export default function ArcadeBackground({ isMoving, className = "" }: ArcadeBac
 
   return (
     <div className={`absolute inset-0 overflow-hidden arcade-scroll-container ${scrollState} ${className}`}>
-      {/* Diagnostic: shows if prefers-reduced-motion is active and debug force-motion */}
-      <div className="fixed bottom-2 right-2 z-50 px-2 py-1 bg-black/80 text-white text-xs font-mono">
-        reduced-motion: {prefersReducedMotion ? "ON" : "OFF"} | debug-force: {debugForceMotion ? "ON" : "OFF"}
-      </div>
 
       {/* Sky — a vertical daylight gradient. Period = tile width (1920px). */}
       <ScrollLayer
@@ -522,6 +483,11 @@ export default function ArcadeBackground({ isMoving, className = "" }: ArcadeBac
         boxClassName="inset-0"
         renderTile={skyTile}
       />
+
+      {/* Sun — static, no parallax */}
+      <div className="absolute inset-0 pointer-events-none z-0">
+        <SunSprite x={424} y={32} size={64} />
+      </div>
 
       {/* Hills — distant, 32 px/s, base tucked behind the treeline */}
       <ScrollLayer
@@ -581,3 +547,10 @@ export default function ArcadeBackground({ isMoving, className = "" }: ArcadeBac
     </div>
   );
 }
+
+/**
+ * Memoized: its only meaningful prop is `isMoving`. Precomputing consolidated
+ * path definitions keeps the background to ~200 SVG path elements and avoids
+ * reconciliation overhead on state changes (stoplight, lives, score).
+ */
+export default memo(ArcadeBackgroundUnmemoized);
