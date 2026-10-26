@@ -74,6 +74,7 @@
   --color-scene-grass-light:     #46964f;
   --color-scene-grass-base:      #36783d;
   --color-scene-grass-shadow:    #265a2b;
+  --color-scene-grass-outline:   #1a2f1a;
 
   /* Road — 4-tone ramp (warm asphalt) */
   --color-scene-road-highlight: #4a4640;
@@ -132,6 +133,20 @@
   --color-lamp-shadow-red: #910808;
   --color-lamp-shadow-yellow: #886807;
   --color-lamp-shadow-green: #287143;
+
+  /* Scorched/crash palette */
+  --color-scorch-charred: #0a0a0a;
+  --color-scorch-soot: #1a1a1a;
+  --color-scorch-grey: #333333;
+  --color-scorch-burnt-orange: #d35400;
+  --color-scorch-ember: #e67e22;
+  --color-scorch-ash: #8a8a8a;
+
+  /* Tree trunk — 4-tone brown ramp (bark) */
+  --color-scene-trunk-highlight: #b98a56;
+  --color-scene-trunk-light:     #8f6b3f;
+  --color-scene-trunk-base:      #6b4f2a;
+  --color-scene-trunk-shadow:    #4a371c;
 
   /* Zero every radius token — hard corners everywhere; pill-shaped exceptions are squared explicitly in App.tsx */
   --radius-xs: 0;
@@ -215,6 +230,23 @@
     50%, 100% { transform: translateY(3px); }
   }
 
+  @keyframes pixelBurstBlock {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) scale(0.4);
+    }
+    15% {
+      opacity: 1;
+    }
+    80% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--burst-x, 0), var(--burst-y, -12px)) scale(0.6);
+    }
+  }
+
   .car-bounce {
     animation: carBounce 300ms steps(1) infinite;
   }
@@ -264,6 +296,9 @@
   .arcade-scroll-rumble,
   .arcade-scroll-dashes,
   .car-bounce {
+    animation: none !important;
+  }
+  .pixel-burst-block {
     animation: none !important;
   }
 }

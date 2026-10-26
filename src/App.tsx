@@ -6,6 +6,8 @@
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Gamepad2, ShieldCheck, ChevronLeft, Trophy, Flag, AlertTriangle } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
+import type { CSSProperties } from "react";
+import React from "react";
 import ArcadeBackground from "./components/ArcadeBackground";
 import CarSprite from "./components/CarSprite";
 // Offline fallback banks. The online database is the primary source; these keep
@@ -261,15 +263,15 @@ export default function App() {
                 <motion.div
                   animate={{
                     y: 0,
-                    rotate: isCrashed ? (prefersReducedMotion ? 0 : [0, 8, 16, 12, 0]) : 0,
-                    x: isCrashed ? (prefersReducedMotion ? 0 : [0, 8, 16, 12, 8, 0]) : 0,
-                    scale: isCrashed ? (prefersReducedMotion ? 1 : [1, 1.02, 0.98, 1]) : 1,
-                    filter: isCrashed ? "brightness(0.5)" : "none"
+                    rotate: isCrashed ? (prefersReducedMotion ? 0 : [0, 6, 12, 8, 0]) : 0,
+                    x: isCrashed ? (prefersReducedMotion ? 0 : [0, 6, 12, 8, 4, 0]) : 0,
+                    scale: isCrashed ? (prefersReducedMotion ? 1 : [1, 1.01, 0.99, 1]) : 1,
+                    filter: "none"
                   }}
                   transition={{
-                    rotate: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
-                    x: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
-                    scale: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }
+                    rotate: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] },
+                    x: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] },
+                    scale: { duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }
                   }}
                   className="absolute bottom-[6%] left-1/4 -translate-x-1/2 z-20"
                 >
@@ -284,17 +286,43 @@ export default function App() {
                     </div>
 
                     {isCrashed && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                        animate={prefersReducedMotion ? { opacity: 1 } : { opacity: [0, 1, 0], scale: [0.8, 1.2, 1.5, 2.5], y: [10, 0, -20, -50] }}
-                        transition={{ repeat: Infinity, duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
-                        className="absolute -top-10 left-1/2 -translate-x-1/2 flex"
+                      <div
+                        className="absolute -top-8 left-1/2 -translate-x-1/2 w-16 h-16 pointer-events-none"
                         aria-hidden
                       >
-                        <div className="w-4 h-4 bg-smoke" />
-                        <div className="w-4 h-4 bg-smoke -mt-3 ml-1" />
-                        <div className="w-4 h-4 bg-smoke -mt-1 ml-2" />
-                      </motion.div>
+                        {!prefersReducedMotion && (
+                          <>
+                            <div
+                              className="absolute top-1/2 left-1/2 w-2 h-2 pixel-burst-block"
+                              style={{ background: "var(--color-scorch-ember)", animation: "pixelBurstBlock 280ms steps(1) forwards", "--burst-x": "-10px", "--burst-y": "-14px" } as CSSProperties}
+                            />
+                            <div
+                              className="absolute top-1/2 left-1/2 w-2 h-2 pixel-burst-block"
+                              style={{ background: "var(--color-scorch-burnt-orange)", animation: "pixelBurstBlock 260ms steps(1) forwards", animationDelay: "20ms", "--burst-x": "8px", "--burst-y": "-12px" } as React.CSSProperties}
+                            />
+                            <div
+                              className="absolute top-1/2 left-1/2 w-2 h-2 pixel-burst-block"
+                              style={{ background: "var(--color-scorch-grey)", animation: "pixelBurstBlock 300ms steps(1) forwards", animationDelay: "10ms", "--burst-x": "-4px", "--burst-y": "-16px" } as React.CSSProperties}
+                            />
+                            <div
+                              className="absolute top-1/2 left-1/2 w-2 h-2 pixel-burst-block"
+                              style={{ background: "var(--color-scorch-soot)", animation: "pixelBurstBlock 290ms steps(1) forwards", animationDelay: "30ms", "--burst-x": "12px", "--burst-y": "-10px" } as React.CSSProperties}
+                            />
+                            <div
+                              className="absolute top-1/2 left-1/2 w-2 h-2 pixel-burst-block"
+                              style={{ background: "var(--color-scorch-charred)", animation: "pixelBurstBlock 310ms steps(1) forwards", animationDelay: "15ms", "--burst-x": "-12px", "--burst-y": "-8px" } as React.CSSProperties}
+                            />
+                            <div
+                              className="absolute top-1/2 left-1/2 w-1 h-1 pixel-burst-block"
+                              style={{ background: "var(--color-scorch-ash)", animation: "pixelBurstBlock 250ms steps(1) forwards", animationDelay: "25ms", "--burst-x": "6px", "--burst-y": "-18px" } as React.CSSProperties}
+                            />
+                            <div
+                              className="absolute top-1/2 left-1/2 w-1 h-1 pixel-burst-block"
+                              style={{ background: "var(--color-scorch-ember)", animation: "pixelBurstBlock 240ms steps(1) forwards", animationDelay: "35ms", "--burst-x": "-8px", "--burst-y": "-14px" } as React.CSSProperties}
+                            />
+                          </>
+                        )}
+                      </div>
                     )}
 
                     {isMoving && !isCrashed && (

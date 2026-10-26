@@ -48,6 +48,21 @@ function getTierColor(lives: number): { base: string; light: string; shadow: str
   };
 }
 
+function getScorchedColorMap(): Record<string, string> {
+  return {
+    O: "var(--color-scorch-charred)",
+    B: "var(--color-scorch-soot)",
+    L: "var(--color-scorch-grey)",
+    S: "var(--color-scorch-charred)",
+    W: "var(--color-scorch-grey)",
+    G: "var(--color-scorch-ash)",
+    H: "var(--color-scorch-burnt-orange)",
+    T: "var(--color-scorch-burnt-orange)",
+    R: "var(--color-scorch-charred)",
+    K: "var(--color-scorch-charred)",
+  };
+}
+
 /**
  * 32x16 Pixel Grid Matrix for an authentic Arcade Sports Car facing forward (RIGHT ->).
  *
@@ -92,18 +107,20 @@ export default function CarSprite({
   const { base, light, shadow } = getTierColor(lives);
   const pitch = 2; // 32 * 2 = 64px width, 16 * 2 = 32px height
 
-  const colorMap: Record<string, string> = {
-    O: "var(--color-scene-outline)",
-    B: base,
-    L: light,
-    S: shadow,
-    W: "var(--color-car-window)",
-    G: "var(--color-scene-clouds)",
-    H: "var(--color-car-headlight)",
-    T: "var(--color-accent-red)",
-    R: "var(--color-smoke)",
-    K: "var(--color-car-dark)",
-  };
+  const colorMap: Record<string, string> = isCrashed
+    ? getScorchedColorMap()
+    : {
+        O: "var(--color-scene-outline)",
+        B: base,
+        L: light,
+        S: shadow,
+        W: "var(--color-car-window)",
+        G: "var(--color-scene-clouds)",
+        H: "var(--color-car-headlight)",
+        T: "var(--color-accent-red)",
+        R: "var(--color-smoke)",
+        K: "var(--color-car-dark)",
+      };
 
   const cells: React.ReactElement[] = [];
   for (let r = 0; r < CAR_MATRIX.length; r++) {

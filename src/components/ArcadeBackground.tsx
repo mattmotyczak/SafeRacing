@@ -47,6 +47,8 @@ import { useReducedMotion } from "motion/react";
 import {
   hillSprite,
   treeSprite,
+  treeFoliageSprite,
+  treeTrunkSprite,
   cloudSprite,
   sunSprite,
   grassSprite,
@@ -278,17 +280,24 @@ function HillsTile() {
 
 /** Render the trees layer as a full 1920px tile with 8 trees at 240px pitch */
 function TreesTile() {
-  const baseGrid = buildSpriteGrid(
-    treeSprite.grid,
-    treeSprite.ramp,
-    treeSprite.outlineToken,
-    treeSprite.light,
+  const trunkGrid = buildSpriteGrid(
+    treeTrunkSprite.grid,
+    treeTrunkSprite.ramp,
+    treeTrunkSprite.outlineToken,
+    treeTrunkSprite.light,
     true
   );
-  const baseWidth = baseGrid[0].length;  // 32
-  const baseHeight = baseGrid.length;    // 48
-  const pitch = treeSprite.pitch;        // 2
-  const treePixelWidth = baseWidth * pitch;  // 64px
+  const foliageGrid = buildSpriteGrid(
+    treeFoliageSprite.grid,
+    treeFoliageSprite.ramp,
+    treeFoliageSprite.outlineToken,
+    treeFoliageSprite.light,
+    true
+  );
+  const baseWidth = treeSprite.grid[0].length;  // 32
+  const baseHeight = treeSprite.grid.length;    // 48
+  const pitch = treeSprite.pitch;               // 2
+  const treePixelWidth = baseWidth * pitch;     // 64px
   const treePitchPx = 240;  // 240px period
   const treesPerTile = 8;   // 1920 / 240 = 8
 
@@ -298,41 +307,52 @@ function TreesTile() {
   // Depth factor for trees: 0.15 → 85% color, 15% sky-horizon
   const depthFactor = 0.15;
 
+  const renderLayer = (grid: Grid) => (
+    <svg
+      className="absolute inset-0 w-full h-full"
+      viewBox={`0 0 ${baseWidth * pitch} ${baseHeight * pitch}`}
+      shapeRendering="crispEdges"
+      style={{ imageRendering: "pixelated" }}
+      aria-hidden
+    >
+      {grid.map((row, r) =>
+        row.map((token, c) => {
+          if (token === ".") return null;
+          const mixedFill = depthMix(token, depthFactor);
+          return (
+            <rect
+              key={`${r}-${c}`}
+              x={c * pitch}
+              y={r * pitch}
+              width={pitch}
+              height={pitch}
+              style={{
+                fill: mixedFill,
+              } as React.CSSProperties}
+            />
+          );
+        })
+      )}
+    </svg>
+  );
+
   return (
     <div className="w-[1920px] h-full relative">
       {treePositions.map((cx, k) => (
-        <svg
+        <div
           key={k}
-          className="absolute bottom-0"
+          className="absolute"
           style={{
             left: `${cx - treePixelWidth / 2}px`,
             width: `${treePixelWidth}px`,
             height: `${baseHeight * pitch}px`,
-            imageRendering: "pixelated",
+            bottom: "-4px",
           }}
-          viewBox={`0 0 ${baseWidth * pitch} ${baseHeight * pitch}`}
-          shapeRendering="crispEdges"
-          aria-hidden
         >
-          {baseGrid.map((row, r) =>
-            row.map((token, c) => {
-              if (token === ".") return null;
-              const mixedFill = depthMix(token, depthFactor);
-              return (
-                <rect
-                  key={`${r}-${c}`}
-                  x={c * pitch}
-                  y={r * pitch}
-                  width={pitch}
-                  height={pitch}
-                  style={{
-                    fill: mixedFill,
-                  } as React.CSSProperties}
-                />
-              );
-            })
-          )}
-        </svg>
+          {/* Trunk first, canopy over it so the junction outline is hidden */}
+          {renderLayer(trunkGrid)}
+          {renderLayer(foliageGrid)}
+        </div>
       ))}
     </div>
   );
@@ -352,12 +372,9 @@ function GroundTile() {
     return Math.floor((r - 4) / 5) % 3;
   };
 
-  // Apply outline first
-  const outlined = outline(baseGrid, grassSprite.outlineToken);
-
-  // Apply ditherBand for band transitions (tufted edge + band boundaries)
+  // Skip outline for grass to avoid dark border
   const ramp = grassSprite.ramp as readonly string[];
-  const dithered = ditherBand(outlined, ramp, (r, _c) => bandIndexFn(r), grassSprite.outlineToken);
+  const dithered = ditherBand(baseGrid, ramp, (r, _c) => bandIndexFn(r));
 
   const grassHeight = dithered.length * grassSprite.pitch; // 80px
   const grassWidth = dithered[0].length * grassSprite.pitch; // 1920px
@@ -371,7 +388,7 @@ function GroundTile() {
       {/* Grass verge — top 23.529% of the layer */}
       <div
         className="absolute inset-x-0 top-0"
-        style={{ height: `${GRASS_FRACTION}%`, position: "relative" } as React.CSSProperties}
+        style={{ height: `${GRASS_FRACTION}%`, position: "relative", backgroundColor: "var(--color-scene-grass-base)" } as React.CSSProperties}
       >
         <svg
           className="absolute inset-0"

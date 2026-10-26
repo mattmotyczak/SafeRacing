@@ -269,44 +269,101 @@ export const treeSprite: {
   readonly light: LightVector;
   readonly pitch: 2;
 } = {
-  grid: (() => {
-    const rows = 48;
-    const cols = 32;
-    const grid: string[][] = Array.from({ length: rows }, () => Array(cols).fill("."));
-
-    const tiers = [
-      { startY: 2, endY: 10, startW: 4, endW: 14 },
-      { startY: 10, endY: 20, startW: 10, endW: 22 },
-      { startY: 20, endY: 34, startW: 16, endW: 28 },
-    ];
-
-    const cx = 16;
-    for (const tier of tiers) {
-      for (let y = tier.startY; y < tier.endY; y++) {
-        const progress = (y - tier.startY) / (tier.endY - tier.startY);
-        const w = Math.round(tier.startW + progress * (tier.endW - tier.startW));
-        const half = Math.floor(w / 2);
-        for (let x = cx - half; x <= cx + half; x++) {
-          if (x >= 0 && x < cols) {
-            grid[y][x] = "#";
-          }
-        }
-      }
-    }
-
-    for (let y = 34; y < 46; y++) {
-      for (let x = cx - 3; x <= cx + 2; x++) {
-        grid[y][x] = "#";
-      }
-    }
-
-    return grid;
-  })(),
+  grid: [
+    ".............###................",
+    ".............#####..............",
+    "............########............",
+    "...........###########..........",
+    "..........#############.........",
+    ".........##############.........",
+    "..........#############.........",
+    "..........##############........",
+    ".........###############........",
+    "..........###############.......",
+    ".........###################....",
+    "......#######################...",
+    ".....########################...",
+    "....#########################...",
+    "...##########################...",
+    "...#########################....",
+    "...##########################...",
+    "...###########################..",
+    "....##########################..",
+    "....##########################..",
+    "....##########################..",
+    "...###########################..",
+    "...##########################...",
+    "..###########################...",
+    ".#############################..",
+    ".##############################.",
+    ".##############################.",
+    ".##############################.",
+    "..#############################.",
+    "..#############################.",
+    "....##########################..",
+    ".....########################...",
+    ".......#####################....",
+    ".............###########........",
+    ".............##########.........",
+    "..............########..........",
+    "........###...########..........",
+    ".......##############...........",
+    "........############............",
+    "..........##########...#........",
+    ".............#######.##.........",
+    "..............#######...........",
+    "..............#######...........",
+    "..............########..........",
+    ".............##########.........",
+    "............############........",
+    "................................",
+    "................................",
+  ].map(row => row.split("")),
   ramp: [
     "var(--color-scene-trees-highlight)",
     "var(--color-scene-trees-light)",
     "var(--color-scene-trees-base)",
     "var(--color-scene-trees-shadow)",
+  ],
+  outlineToken: "var(--color-scene-outline)",
+  light: { x: 1, y: -1 },
+  pitch: 2,
+};
+
+/** Tree canopy — rows 0-32 of treeSprite, everything below blank. */
+export const treeFoliageSprite: {
+  readonly grid: Grid;
+  readonly ramp: ShadeRamp;
+  readonly outlineToken: string;
+  readonly light: LightVector;
+  readonly pitch: 2;
+} = {
+  grid: treeSprite.grid.map((row, r) => (r <= 32 ? row : row.map(() => "."))),
+  ramp: [
+    "var(--color-scene-trees-highlight)",
+    "var(--color-scene-trees-light)",
+    "var(--color-scene-trees-base)",
+    "var(--color-scene-trees-shadow)",
+  ],
+  outlineToken: "var(--color-scene-outline)",
+  light: { x: 1, y: -1 },
+  pitch: 2,
+};
+
+/** Tree trunk + branches — rows 33-45 of treeSprite, everything above blank. */
+export const treeTrunkSprite: {
+  readonly grid: Grid;
+  readonly ramp: ShadeRamp;
+  readonly outlineToken: string;
+  readonly light: LightVector;
+  readonly pitch: 2;
+} = {
+  grid: treeSprite.grid.map((row, r) => (r >= 33 ? row : row.map(() => "."))),
+  ramp: [
+    "var(--color-scene-trunk-highlight)",
+    "var(--color-scene-trunk-light)",
+    "var(--color-scene-trunk-base)",
+    "var(--color-scene-trunk-shadow)",
   ],
   outlineToken: "var(--color-scene-outline)",
   light: { x: 1, y: -1 },
@@ -361,7 +418,7 @@ export const cloudSprite: {
   pitch: 2,
 };
 
-/** Sun sprite — 32×32 px at pitch 2 (64×64 viewBox) — Solid retro 8-bit sun */
+/** Sun sprite — 32×32 px at pitch 2 (64×64 viewBox) — Solid retro sun */
 export const sunSprite: {
   readonly grid: Grid;
   readonly ramp: ShadeRamp;
@@ -369,31 +426,40 @@ export const sunSprite: {
   readonly light: LightVector;
   readonly pitch: 2;
 } = {
-  grid: (() => {
-    const size = 32;
-    const grid: string[][] = Array.from({ length: size }, () => Array(size).fill("."));
-    const cx = 15.5;
-    const cy = 15.5;
-    const r = 10;
-
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const d2 = (x - cx) ** 2 + (y - cy) ** 2;
-        if (d2 <= r ** 2) {
-          grid[y][x] = "#";
-        }
-      }
-    }
-
-    for (let i = 0; i < 4; i++) {
-      grid[2 + i][15] = "#"; grid[2 + i][16] = "#";   // top
-      grid[26 + i][15] = "#"; grid[26 + i][16] = "#"; // bottom
-      grid[15][2 + i] = "#"; grid[16][2 + i] = "#";   // left
-      grid[15][26 + i] = "#"; grid[16][26 + i] = "#"; // right
-    }
-
-    return grid;
-  })(),
+  grid: [
+    "................................",
+    "...............#................",
+    ".........#....###....#..........",
+    "..............###...............",
+    "....##....#...###...#....##.....",
+    "....###.......###.......###.....",
+    ".....###...#...#...#...###......",
+    "......###.............###.......",
+    ".......#.....#####.....#........",
+    "..#........#########........#...",
+    "....#.....###########.....#.....",
+    "......#..#############..#.......",
+    ".........#############..........",
+    "........###############.........",
+    "........###############.........",
+    "..####..###############..####...",
+    ".######.###############.######..",
+    "..####..###############..####...",
+    "........###############.........",
+    ".........#############..........",
+    "......#..#############..#.......",
+    "....#.....###########.....#.....",
+    "..#........#########........#...",
+    ".......#.....#####.....#........",
+    "......###.............###.......",
+    ".....###...#...#...#...###......",
+    "....###.......###.......###.....",
+    "....##....#...###...#....##.....",
+    "..............###...............",
+    ".........#....###....#..........",
+    "...............#................",
+    "................................",
+  ].map(row => row.split("")),
   ramp: [
     "var(--color-scene-sun-highlight)",
     "var(--color-scene-sun-light)",
@@ -480,7 +546,7 @@ export const grassSprite: {
     "var(--color-scene-grass-light)",
     "var(--color-scene-grass-base)",
   ],
-  outlineToken: "var(--color-scene-outline)",
+  outlineToken: "var(--color-scene-grass-outline)",
   light: { x: 1, y: -1 },
   pitch: 4,
 };
