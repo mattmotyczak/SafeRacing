@@ -501,18 +501,30 @@ export default function App() {
 
       {/* Footer Branding - Bottom left corner */}
       <footer className="fixed bottom-0 left-0 w-full py-6 z-20 pointer-events-none">
-        <div className="max-w-[1280px] px-8 flex justify-start">
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.8, ease: "circOut" }}
-            className="pixel-panel p-2.5 flex flex-col items-start justify-center pointer-events-auto min-w-[120px]"
-          >
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.5, duration: 0.8, ease: "circOut" }}
+          className="max-w-[1280px] px-8 flex justify-start items-stretch gap-3"
+        >
+          <div className="pixel-panel p-2.5 flex flex-col items-start justify-center pointer-events-auto min-w-[120px]">
             <p className="text-primary font-black tracking-tight text-[10px] sm:text-[12px]">Desarrollado por el Equipo Foxtrot</p>
             <div className="h-px w-8 bg-gradient-to-r from-transparent via-primary/30 to-transparent my-1" />
             <p className="text-[6px] sm:text-[7px] uppercase font-bold tracking-[0.4em] text-on-surface-variant/70">Proyecto Final</p>
-          </motion.div>
-        </div>
+          </div>
+
+          {/* Difficulty of the run in effect. Hidden before a mode is chosen,
+              because `mode` defaults to 'easy' and would read as a selection. */}
+          {(status === 'playing' || status === 'game_over') && (
+            <div className="pixel-panel px-3 py-2.5 flex flex-col items-start justify-center min-w-[96px]">
+              <p className="text-[6px] sm:text-[7px] uppercase font-bold tracking-[0.4em] text-on-surface-variant/70">Modo</p>
+              <div className="h-px w-8 bg-gradient-to-r from-transparent via-primary/30 to-transparent my-1" />
+              <p className="text-primary font-black tracking-tight text-[10px] sm:text-[12px] uppercase">
+                {mode === 'easy' ? 'Fácil' : 'Realista'}
+              </p>
+            </div>
+          )}
+        </motion.div>
       </footer>
 
       {/* Global Atmosphere Overlays */}
