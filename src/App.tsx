@@ -127,15 +127,26 @@ export default function App() {
     setLightState('red');
   }, [mode, dbEasy, dbHard]);
 
+  // The road starts rolling before the lamp turns green, so the onset reads as
+  // a pull-away rather than a cut. 250ms stays under the threshold where the
+  // delay looks like a stuck light. Reduced motion skips the lead entirely.
+  const beginRun = () => {
+    setIsMoving(true);
+    if (prefersReducedMotion) {
+      setLightState('green');
+      return;
+    }
+    setTimeout(() => setLightState('green'), 250);
+  };
+
   const startGame = (selectedMode: 'easy' | 'hard') => {
     setMode(selectedMode);
     setStatus('playing');
     setLives(1);
     setScore(0);
     setConsecutiveCorrect(0);
-    setIsMoving(true);
     setIsCrashed(false);
-    setLightState('green');
+    beginRun();
     askedIds.current = []; // a new run re-serves the whole bank
     lastId.current = -1;
 
@@ -163,11 +174,11 @@ export default function App() {
         setLives(prev => prev + 1);
       }
 
-      setIsMoving(true);
       setCurrentQuestion(null);
-      setLightState('green');
+      beginRun();
 
-      // Move for 3s (2s green + 1s yellow)
+      // Hold green 2s, then 1s yellow before the road stops. The lamp itself
+      // trails the roll by 250ms, so movement lasts ~3.25s.
       setTimeout(() => {
         setLightState('yellow');
         setTimeout(() => {
@@ -176,9 +187,8 @@ export default function App() {
         }, 1000);
       }, 2000);
     } else {
-      setIsMoving(true);
       setCurrentQuestion(null);
-      setLightState('green');
+      beginRun();
 
       // Crash at 2s
       setTimeout(() => {
@@ -193,8 +203,7 @@ export default function App() {
         setTimeout(() => {
           if (newLives > 0) {
             setIsCrashed(false);
-            setIsMoving(true);
-            setLightState('green');
+            beginRun();
             setTimeout(() => {
               setLightState('yellow');
               setTimeout(() => {

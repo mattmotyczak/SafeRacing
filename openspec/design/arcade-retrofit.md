@@ -33,7 +33,7 @@ Replace SafeRacing's flat Lucide-icon UI with a pixel-art arcade aesthetic using
 | Decision | Options | Tradeoff | Choice |
 |----------|---------|----------|--------|
 | Car sprite approach | (A) Inline SVG rects, (B) External raster sprite, (C) Canvas draw | (A) zero deps/license risk but manual art; (B) asset pipeline needed; (C) breaks DOM pattern | **(A) Inline SVG `<rect>` primitives** — zero risk, consistent with DOM stack. Medium **unchanged**; flat-fill discipline **amended 2026-10-03**, see [Amendment 2026-10-03](#amendment-2026-10-03--scenery-art-flat-fills-superseded-by-shaded-dithered-pixel-art) |
-| Background loop technique | (A) CSS translateX tile-duplicate, (B) Canvas tile loop, (C) JS RAF ticker | (A) proven in codebase, GPU-composited; (B/C) adds complexity and canvas | **(A) CSS translateX** — extends existing `scrollBackground` pattern |
+| Background loop technique | (A) CSS translateX tile-duplicate, (B) Canvas tile loop, (C) JS RAF ticker | (A) proven in codebase, GPU-composited; (B/C) adds complexity and canvas | ~~**(A) CSS translateX**~~ **superseded 2026-10-27** by one shared rAF velocity integrator - `animation-play-state` is binary and cannot ramp; see [Amendment 2026-10-27](#amendment-2026-10-27---background-loop-ramps-above-css-keyframes) |
 | Font loading | (A) CSS `@import`, (B) `<link>` in index.html, (C) Self-hosted | (A) simplest, zero build changes; (B) blocks HTML parse; (C) adds asset pipeline | **(A) CSS `@import`** — one line in index.css, CDN fallback built-in |
 | Palette token strategy | (A) Replace all hex with tokens, (B) Tokens + keep traffic-light hex | (A) total consistency; (B) pragmatic — traffic-light colors are semantically distinct | **(B) Tokens + traffic-light exception** — traffic-light `bg-red-500` etc. are intentional, not brand |
 | Component extraction | (A) ArcadeBackground + CarSprite extracted from App.tsx, (B) Keep monolith | (A) testable, typed props, smaller App.tsx; (B) simpler but 524-line monolith | **(A) Extract both** — typed props enable isolated reasoning |
@@ -214,11 +214,32 @@ interface CarSpriteProps {
 
 ## Background Loop
 
+> **Superseded 2026-10-27.** The CSS `@keyframes scrollBackground` mechanism described
+> in this section is gone. See [Amendment 2026-10-27](#amendment-2026-10-27---background-loop-ramps-above-css-keyframes).
+> The periodicity analysis below still governs the pan distance.
+
 Extends existing `@keyframes scrollBackground` (`translateX(0) → translateX(-50%)`). `ArcadeBackground.tsx` renders a 200%-width container with two pixel-identical tile children per layer (sky checkerboard, ground stripes, road dashes). Animation uses `arcade-scroll-*` CSS classes paused by default; `isMoving` adds `arcade-scroll-running` to resume. `@media (prefers-reduced-motion: reduce)` sets `animation: none !important`, showing the static frame at `translateX(0)`.
 
 **Seam fix (delta)**: the dash layer is NOT mathematically periodic with panel-relative tile widths — 20×`w-32` (128px) dashes + 19×`gap-16` (64px) gaps = 3776px; half of that (1888px) ≠ integer × 192px period, so one dash merges at the wrap seam every cycle. Fix: replace the flex-dash row with a `repeating-linear-gradient(90deg, var(--color-dash) 0 128px, transparent 128px 192px)` on a tile with `background-size: 1920px 100%` and `background-repeat: repeat`. 1920px = exactly 10 periods. **Critical periodicity constraint**: seamless wrapping requires the pan distance (one tile width) to be ≡ 0 (mod 192px). The dash layer therefore uses TWO FIXED `1920px` tiles inside a `3840px` container (`ArcadeBackground.tsx`), so `translateX(-50%)` pans exactly one container half (1920px = 10 periods) and the A/B boundary stays on a period boundary at every viewport width. Do NOT use `w-1/2` tiles for this layer: tile width then equals the panel width (1100px at the runner's `max-w-[1100px]`), `1100 mod 192 = 140`, and the 64px gap collapses to ~12px at the tile boundary, producing a visible moving seam each 2s cycle (verified finding R3-1). The ground stripe `rgba(41,173,255,0.04)` hardcode becomes `--color-track-line`; sky/ground layers keep their `background-repeat` tiles and are visually continuous at the designed panel width (sky period 100px, 1100 mod 100 = 0; ground period 40px, half-cell offset is sub-visible at rgba alpha 0.04).
 
 > **Open follow-up (R3-2).** The arithmetic is written down and the fix is proven by hand, but there is no automated regression test — there is no test runner. A change to a layer's period re-opens this silently.
+
+### Amendment 2026-10-27 - background loop ramps above CSS keyframes
+
+**Why.** Starting and stopping a run snapped every layer from rest to 960 px/s in a single frame. A ramp needs a velocity axis, and `animation-play-state` is binary: changing `animation-duration` or `animation-delay` instead seeks the timeline and jumps the layer's phase.
+
+**Rejected - compensating wrapper.** An outer element moving against the layer can cancel velocity (net speed = layer + wrapper), but it ends parked at an offset that must be reset while paused, and the reset is only invisible when the offset is a multiple of that layer's period. That holds for the 192 px and 60 px layers and fails for the rest, so it could not ramp the whole scene together.
+
+**Chosen - one shared rAF integrator.** `scrollTick` in `ArcadeBackground.tsx` advances a single travelled distance from a single velocity scalar `v` in `[0,1]`, ramping linearly over 0.55 s in both directions. Each layer reads `travelled × depth` modulo 1920 px, where depth is that layer's cruise speed over 960 px/s. Consequences recorded deliberately:
+
+- All seven layers ramp together and stay exactly proportional, which no per-layer keyframe can express.
+- The pan still wraps at exactly 1920 px, so the periodicity constraint above is unchanged and is now enforced by the modulo rather than by `translateX(-50%)`.
+- The scroll leaves the compositor thread and becomes seven style writes per frame. `gridToPaths` already collapses the scene to ~200 SVG paths, so reconciliation is not the cost it once was.
+- The loop stops scheduling frames when `v` reaches 0, so the question screen costs nothing.
+- Reduced motion never starts the loop; the tiles render at rest and the integrator's rAF branch replaces the old `animation: none` entry for these layers.
+
+**Cost accepted.** This reverses decision (A) in the Architecture Decisions table. The earlier objection - "(B/C) adds complexity and canvas" - applies to Canvas, not to a single integrator; no canvas and no new dependency was added.
+
 
 ## Typography
 

@@ -3,13 +3,13 @@
  *
  * Paint order, back to front: sky → hills → trees → ground → edges → rumble →
  * dashes. Every animated layer is two identical `w-[1920px]` tiles inside a
- * `w-[3840px]` row, driven by the shared `scrollBackground` keyframes
- * (translateX(0 → -50%)). The tile width is FIXED at 1920px — never `w-1/2`,
- * never `w-[200%]` — because a translateX(-50%) loop pans exactly one container
- * half (1920px), and the seam is only invisible when 1920 is congruent to 0
- * modulo that layer's own period at EVERY viewport width. A percentage tile makes
- * the pan distance the panel width instead, which is period-aligned only by
- * accident (1100 mod 100 = 0 today; 1100 mod 192 = 140, a visible gap). Layer
+ * `w-[3840px]` row, panned by the shared velocity integrator below. The tile
+ * width is FIXED at 1920px — never `w-1/2`, never `w-[200%]` — because the pan
+ * wraps at exactly one tile (1920px), and the seam is only invisible when 1920
+ * is congruent to 0 modulo that layer's own period at EVERY viewport width. A
+ * percentage tile would make the pan distance the panel width instead, which is
+ * period-aligned only by accident (1100 mod 100 = 0 today; 1100 mod 192 = 140, a
+ * visible gap). Layer
  * periods — sky 1920 (uniform fill), hills 640, trees 240, ground uniform, edges
  * 60, rumble 192, dashes 192 — all divide 1920 exactly, so every seam is
  * off-panel by construction rather than by luck.
@@ -18,9 +18,11 @@
  * viewports wider than 1920px stay covered; the two rows animate in sync and
  * together span [-1920px, 5760px].
  *
- * Pure CSS — no requestAnimationFrame, no JS ticker. Reduced motion is disabled
- * twice over: `motion-reduce:animate-none` in the markup here, and the
- * `prefers-reduced-motion` block at the bottom of index.css.
+ * Motion is a single rAF integrator shared by all layers: one velocity scalar
+ * ramps 0..cruise, so the whole scene accelerates and coasts together and stays
+ * proportional. Per-layer CSS keyframes cannot ramp at all — animation-play-state
+ * is binary, and changing duration or delay seeks the timeline and jumps phase.
+ * Reduced motion never starts the integrator, and the tiles render at rest.
  *
  * Vertical stack, as a percentage of the panel height so the composition holds at
  * every viewport. The panel is `aspect-video`, so a fixed-px budget silently
@@ -41,7 +43,7 @@
  * @license Apache-2.0
  */
 
-import React, { useState, useEffect, memo } from "react";
+import React, { useState, useEffect, useRef, memo } from "react";
 import type { ReactNode } from "react";
 import { useReducedMotion } from "motion/react";
 import {
@@ -80,28 +82,109 @@ const rumbleGradient =
   "repeating-linear-gradient(90deg,var(--color-scene-rumble-red-base) 0 96px,var(--color-scene-rumble-white-base) 96px 192px)";
 
 interface ScrollLayerProps {
-  scrollClass: string;
-  scrollState: string;
+  /** Fraction of cruise speed this layer travels at. */
+  depth: number;
+  /** Reduced motion: leave the tile at rest and never register it. */
+  frozen: boolean;
   boxClassName: string;
   renderTile: () => ReactNode;
 }
 
+/** Pan distance of one loop, shared by every layer. Congruent to 0 modulo each
+ *  layer's own period, so no seam can appear at any viewport width. */
+const TILE_PX = 1920;
+
+/** Cruise speed of the nearest layer, in px/s. */
+const CRUISE_PX_PER_S = 960;
+
+/** Seconds to reach cruise from rest, and to coast back to rest. */
+const RAMP_SECONDS = 0.55;
+
+/** Longest frame a backgrounded tab may contribute, so the scene cannot jump. */
+const MAX_FRAME_SECONDS = 0.05;
+
+interface ScrollTarget {
+  el: HTMLElement;
+  depth: number;
+}
+
+/* One integrator drives the whole scene. Velocity is a single scalar, so all
+ * layers ramp together and stay exactly proportional. Per-layer CSS keyframes
+ * cannot do this: animation-play-state is binary, and changing duration or
+ * delay both seek the timeline and jump the phase. */
+const scrollTargets = new Set<ScrollTarget>();
+let scrollMoving = false;
+let scrollFrame = 0;
+let scrollLast = 0;
+let scrollSpeed = 0;
+let scrollTravelled = 0;
+
+function scrollTick(now: number) {
+  // Clamped both ways: a backgrounded tab must not teleport the scene, and a
+  // clock that steps backwards must not run the road in reverse.
+  const dt = Math.max(0, Math.min((now - scrollLast) / 1000, MAX_FRAME_SECONDS));
+  scrollLast = now;
+
+  const target = scrollMoving ? 1 : 0;
+  const step = dt / RAMP_SECONDS;
+  scrollSpeed =
+    target > scrollSpeed
+      ? Math.min(target, scrollSpeed + step)
+      : Math.max(target, scrollSpeed - step);
+
+  // Park only once the road is meant to be stopped. Parking on `scrollSpeed === 0`
+  // alone would kill the loop on its very first frame: the callback can receive a
+  // frame timestamp older than the performance.now() taken when rAF was requested,
+  // so dt clamps to 0, speed stays 0, and the chain never reschedules.
+  if (!scrollMoving && scrollSpeed === 0) {
+    scrollFrame = 0;
+    return;
+  }
+
+  scrollTravelled += scrollSpeed * CRUISE_PX_PER_S * dt;
+  for (const entry of scrollTargets) {
+    const offset = (scrollTravelled * entry.depth) % TILE_PX;
+    entry.el.style.transform = `translate3d(${-offset}px,0,0)`;
+  }
+  scrollFrame = requestAnimationFrame(scrollTick);
+}
+
+function scrollSetMoving(next: boolean) {
+  scrollMoving = next;
+  if (next && scrollFrame === 0) {
+    scrollLast = performance.now();
+    scrollFrame = requestAnimationFrame(scrollTick);
+  }
+}
+
 /**
  * One animated layer: the A row at left-0 and an identical B row at
- * left-[3840px], each holding two 1920px tiles. Both rows carry the same
- * scroll class so they stay in lockstep.
+ * left-[3840px], each holding two 1920px tiles. Both rows register with the
+ * integrator so they stay in lockstep.
  */
-function ScrollLayer({ scrollClass, scrollState, boxClassName, renderTile }: ScrollLayerProps) {
+function ScrollLayer({ depth, frozen, boxClassName, renderTile }: ScrollLayerProps) {
+  const rowA = useRef<HTMLDivElement>(null);
+  const rowB = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (frozen) return;
+    const targets = [rowA.current, rowB.current]
+      .filter((el): el is HTMLDivElement => el !== null)
+      .map((el) => ({ el, depth }));
+    targets.forEach((target) => scrollTargets.add(target));
+    return () => targets.forEach((target) => scrollTargets.delete(target));
+  }, [depth, frozen]);
+
   const rowClass = (left: string) =>
-    `${scrollClass} ${scrollState} absolute ${boxClassName} ${left} w-[3840px] flex`;
+    `absolute ${boxClassName} ${left} w-[3840px] flex will-change-transform`;
 
   return (
     <>
-      <div className={rowClass("left-0")} aria-hidden>
+      <div ref={rowA} className={rowClass("left-0")} aria-hidden>
         {renderTile()}
         {renderTile()}
       </div>
-      <div className={rowClass("left-[3840px]")} aria-hidden>
+      <div ref={rowB} className={rowClass("left-[3840px]")} aria-hidden>
         {renderTile()}
         {renderTile()}
       </div>
@@ -462,8 +545,13 @@ function ArcadeBackgroundUnmemoized({ isMoving, className = "" }: ArcadeBackgrou
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const effectiveReducedMotion = prefersReducedMotion && !debugForceMotion;
-  const scrollState = isMoving && !effectiveReducedMotion ? "arcade-scroll-running" : "";
+  const effectiveReducedMotion = Boolean(prefersReducedMotion) && !debugForceMotion;
+
+  // The integrator owns velocity; React only says whether the road should move.
+  useEffect(() => {
+    scrollSetMoving(isMoving && !effectiveReducedMotion);
+    return () => scrollSetMoving(false);
+  }, [isMoving, effectiveReducedMotion]);
 
   const skyTile = () => (
     <div className="w-[1920px] h-full relative" style={{ backgroundImage: skyGradient }}>
@@ -474,12 +562,12 @@ function ArcadeBackgroundUnmemoized({ isMoving, className = "" }: ArcadeBackgrou
   );
 
   return (
-    <div className={`absolute inset-0 overflow-hidden arcade-scroll-container ${scrollState} ${className}`}>
+    <div className={`absolute inset-0 overflow-hidden ${className}`}>
 
       {/* Sky — a vertical daylight gradient. Period = tile width (1920px). */}
       <ScrollLayer
-        scrollClass="arcade-scroll-sky"
-        scrollState=""
+        depth={16 / CRUISE_PX_PER_S}
+        frozen={effectiveReducedMotion}
         boxClassName="inset-0"
         renderTile={skyTile}
       />
@@ -491,56 +579,56 @@ function ArcadeBackgroundUnmemoized({ isMoving, className = "" }: ArcadeBackgrou
 
       {/* Hills — distant, 32 px/s, base tucked behind the treeline */}
       <ScrollLayer
-        scrollClass="arcade-scroll-hills"
-        scrollState=""
+        depth={32 / CRUISE_PX_PER_S}
+        frozen={effectiveReducedMotion}
         boxClassName="bottom-[34%] h-[28%]"
         renderTile={HillsTile}
       />
 
       {/* Trees — nearer, 76.8 px/s, base on the horizon */}
       <ScrollLayer
-        scrollClass="arcade-scroll-trees"
-        scrollState=""
+        depth={76.8 / CRUISE_PX_PER_S}
+        frozen={effectiveReducedMotion}
         boxClassName="bottom-[34%] h-[24%]"
         renderTile={TreesTile}
       />
 
       {/* Surface plane — grass verge over road */}
       <ScrollLayer
-        scrollClass="arcade-scroll-ground"
-        scrollState=""
+        depth={192 / CRUISE_PX_PER_S}
+        frozen={effectiveReducedMotion}
         boxClassName="bottom-0 h-[34%]"
         renderTile={GroundTile}
       />
 
       {/* Road edge lines — 60px period, 960 px/s */}
       <ScrollLayer
-        scrollClass="arcade-scroll-edges"
-        scrollState=""
+        depth={1}
+        frozen={effectiveReducedMotion}
         boxClassName="bottom-0 h-[26%]"
         renderTile={EdgesTile}
       />
 
       {/* Kerb rumble — 192px period, 960 px/s, on the grass/road boundary */}
       <ScrollLayer
-        scrollClass="arcade-scroll-rumble"
-        scrollState=""
+        depth={1}
+        frozen={effectiveReducedMotion}
         boxClassName="bottom-[26%] h-1"
         renderTile={RumbleTile}
       />
 
       {/* Road dashes — 192px period, 960 px/s, lane divider at the road midpoint */}
       <ScrollLayer
-        scrollClass="arcade-scroll-dashes"
-        scrollState=""
+        depth={1}
+        frozen={effectiveReducedMotion}
         boxClassName="bottom-[13%] h-1"
         renderTile={DashesTile}
       />
 
       {/* Road texture overlay — sparse horizontal cracks & patches at 40% opacity */}
       <ScrollLayer
-        scrollClass="arcade-scroll-dashes"
-        scrollState=""
+        depth={1}
+        frozen={effectiveReducedMotion}
         boxClassName="bottom-[13%] h-[40px]"
         renderTile={RoadTextureTile}
       />

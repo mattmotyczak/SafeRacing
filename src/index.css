@@ -201,29 +201,13 @@
     --color-hard-shadow: var(--color-lamp-shadow-green);
   }
 
-  /* Arcade background scroll layers — paused until isMoving adds the class.
-   Durations are set per layer because the pan distance is always 1920px, so the
-   duration IS the depth cue: sky 16 px/s (120s), hills 32 px/s (60s), trees
-   76.8 px/s (25s), ground 192 px/s (10s), edges/rumble/dashes 960 px/s (2s).
-   One shared duration would drag every layer to a single speed and collapse the
-   depth read the whole scene depends on — the sky has to read as far away, and
-   the dashes as underfoot, at the same instant.
-   
-   Play state is controlled via CSS variable --scroll-state on the container:
-   .arcade-scroll-container sets --scroll-state: paused;
-   .arcade-scroll-running sets --scroll-state: running;
-   Each layer reads animation-play-state: var(--scroll-state, paused). */
-  .arcade-scroll-container {
-    --scroll-state: paused;
-  }
-  .arcade-scroll-running {
-    --scroll-state: running;
-  }
-
-  @keyframes scrollBackground {
-    from { transform: translateX(0); }
-    to { transform: translateX(-50%); }
-  }
+  /* Arcade background scroll layers are driven by the velocity integrator in
+   ArcadeBackground.tsx: one requestAnimationFrame loop advances a single
+   travelled distance, and each layer reads it at its own depth (sky 16 px/s,
+   hills 32, trees 76.8, ground 192, edges/rumble/dashes 960 at cruise). Speed
+   therefore ramps together instead of snapping, and the pan stays a whole
+   multiple of each layer's period. Do not reintroduce per-layer keyframes here:
+   animation-play-state is binary and cannot express a ramp. */
 
   @keyframes carBounce {
     0%, 49.99% { transform: translateY(0); }
@@ -319,51 +303,9 @@
   .car-bounce {
     animation: carBounce 300ms steps(1) infinite;
   }
-
-  /* Scroll layers — animation play state controlled by container's --scroll-state */
-  .arcade-scroll-sky,
-  .arcade-scroll-hills,
-  .arcade-scroll-trees,
-  .arcade-scroll-ground,
-  .arcade-scroll-edges,
-  .arcade-scroll-rumble,
-  .arcade-scroll-dashes {
-    animation: scrollBackground 120s linear infinite;
-    animation-play-state: var(--scroll-state, paused);
-  }
-
-  /* Override durations per layer for parallax depth */
-  .arcade-scroll-sky {
-    animation-duration: 120s;
-  }
-  .arcade-scroll-hills {
-    animation-duration: 60s;
-  }
-  .arcade-scroll-trees {
-    animation-duration: 25s;
-  }
-  .arcade-scroll-ground {
-    animation-duration: 10s;
-  }
-  .arcade-scroll-edges,
-  .arcade-scroll-rumble,
-  .arcade-scroll-dashes {
-    animation-duration: 2s;
-  }
-
-  .arcade-scroll-running {
-    animation-play-state: running;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .arcade-scroll-sky,
-  .arcade-scroll-hills,
-  .arcade-scroll-trees,
-  .arcade-scroll-ground,
-  .arcade-scroll-edges,
-  .arcade-scroll-rumble,
-  .arcade-scroll-dashes,
   .car-bounce {
     animation: none !important;
   }

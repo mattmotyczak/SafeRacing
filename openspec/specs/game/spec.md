@@ -308,19 +308,37 @@ At `lives >= 5` a `.car-aura` overlay MUST render.
 
 ### Requirement: Background scroll layers
 
-`ArcadeBackground` SHALL render exactly three scroll layers. All are CSS-only: the `translateX(0 → -50%)` `scrollBackground` keyframes, no `requestAnimationFrame` and no JS ticker.
+`ArcadeBackground` SHALL render seven scroll layers: sky, hills, trees, ground, edges, rumble, dashes. A road-texture overlay scrolls with the dashes. Every layer is two fixed `w-[1920px]` tiles inside a `w-[3840px]` row.
 
-| Layer | Class | Period | Duration | Tile geometry |
-|-------|-------|--------|----------|---------------|
-| Sky | `.arcade-scroll-sky` | 100 px | 25 s | two `w-1/2` tiles in a `w-[200%]` flex row |
-| Ground | `.arcade-scroll-ground` | 40 px | 10 s | two `w-1/2` tiles in a `w-[200%]` flex row |
-| Dashes | `.arcade-scroll-dashes` | 192 px | 2 s | two fixed `w-[1920px]` tiles in a `w-[3840px]` flex row |
+Motion SHALL be driven by exactly one `requestAnimationFrame` integrator (`scrollTick` in `src/components/ArcadeBackground.tsx`). It advances one travelled distance from one velocity scalar `v` in `[0, 1]`, and each layer is painted at `translate3d(-((travelled × depth) mod 1920)px, 0, 0)`. No component may run a second frame loop or a per-layer interval.
 
-Every layer MUST be `animation-play-state: paused` by default and MUST only run while `isMoving` is true (the `arcade-scroll-running` class).
+| Layer | Depth | Cruise speed |
+|-------|-------|--------------|
+| Sky | 16 / 960 | 16 px/s |
+| Hills | 32 / 960 | 32 px/s |
+| Trees | 76.8 / 960 | 76.8 px/s |
+| Ground | 192 / 960 | 192 px/s |
+| Edges, rumble, dashes, road texture | 1 | 960 px/s |
+
+`v` MUST ramp linearly from 0 to 1 over 0.55 s when `isMoving` becomes true, and back to 0 over the same interval when it becomes false, so cruise speed is reached gradually and not in one frame. `v` MUST stay within `[0, 1]`, and one frame SHALL contribute at most 50 ms of travel so a backgrounded tab cannot make the scene jump. The loop MUST stop scheduling frames once `v` reaches 0 and MUST restart on the next `isMoving` true.
+
+#### Scenario: The scene accelerates instead of snapping
+- **Given** the scene is at rest
+- **When** `isMoving` becomes true
+- **Then** every layer's speed rises from 0 to cruise over 0.55 s
+- **And** no frame jumps from 0 to cruise speed
+- **And** all layers keep their proportional depth throughout the ramp
+
+#### Scenario: The scene coasts to a stop
+- **Given** the scene is at cruise
+- **When** `isMoving` becomes false
+- **Then** speed falls linearly to 0 over 0.55 s, and the loop stops scheduling frames
+
+**Verify:** code read of `scrollTick`, `scrollTargets`, and `ScrollLayer` in `src/components/ArcadeBackground.tsx`, plus `npm run lint`. There is no test runner and no browser tooling in this environment, so the ramp is not measured automatically.
 
 #### Requirement: Seamless wrapping is a periodicity constraint, not a visual check
 
-For any layer using `translateX(-50%)`, the pan distance MUST be congruent to `0` modulo that layer's period, **at every viewport width**. For the dash layer the pan distance is fixed at 1920 px = 10 × 192 px, so the boundary always lands on a period boundary. A `w-1/2` dash tile MUST NOT be used: its width equals the panel width (1100 px at `max-w-[1100px]`), and 1100 mod 192 = 140, which collapses the nominal 64 px gap to ~12 px at the boundary and shows a moving seam every cycle.
+For any scroll layer, the pan distance MUST be congruent to `0` modulo that layer's period, **at every viewport width**. Every layer wraps at exactly 1920 px = 10 × 192 px, so the boundary always lands on a period boundary. A `w-1/2` dash tile MUST NOT be used: its width equals the panel width (1100 px at `max-w-[1100px]`), and 1100 mod 192 = 140, which collapses the nominal 64 px gap to ~12 px at the boundary and shows a moving seam every cycle.
 
 #### Scenario: The dash layer does not seam across cycles
 - **Given** the game panel is 1100 px wide
@@ -331,14 +349,14 @@ For any layer using `translateX(-50%)`, the pan distance MUST be congruent to `0
 
 ### Requirement: Reduced motion is honored on every animated layer
 
-When `prefers-reduced-motion: reduce` is set, the game MUST disable: all three background scroll layers, the car bounce, the car aura, the crash rotate/translate, the smoke and exhaust animations, and the menu icon rotation.
+When `prefers-reduced-motion: reduce` is set, the game MUST disable: the background scroll integrator, the car bounce, the car aura, the crash rotate/translate, the smoke and exhaust animations, and the menu icon rotation.
 
 #### Scenario: Reduced motion stops the world
 - **Given** the OS reduced-motion setting is on
 - **When** a game is running
-- **Then** the background is static at `translateX(0)`, the car does not bounce, and crash feedback is opacity-only
+- **Then** `scrollSetMoving` is never called with `true`, so the background never moves, the car does not bounce, and crash feedback is opacity-only
 
-**Verify:** grep — `motion-reduce:animate-none` on each `ArcadeBackground` layer and on `.car-bounce`; the `@media (prefers-reduced-motion: reduce)` block in `src/index.css:127-135`; `prefersReducedMotion` from `motion` gating the crash and smoke/exhaust animations in `App.tsx`.
+**Verify:** grep - `scrollSetMoving` in `src/components/ArcadeBackground.tsx` is gated on `!effectiveReducedMotion`, and `ScrollLayer` skips registration when `frozen`; the `@media (prefers-reduced-motion: reduce)` block in `src/index.css` still lists `.car-bounce` and the crash/exhaust animations; `prefersReducedMotion` from `motion` gates the crash and smoke/exhaust animations in `App.tsx`.
 
 **Known gap:** the `AnimatePresence` entrance transitions (menu, mode select, question panel, game over) are not gated on `prefersReducedMotion`.
 
